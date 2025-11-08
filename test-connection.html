@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Supabase Connection Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        .data-table th, .data-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        .data-table th {
+            background-color: #f2f2f2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Customer Dashboard - Supabase Connection Test</h1>
+        
+        <div id="status" class="status info">
+            Ready to test Supabase connection...
+        </div>
+
+        <div style="margin: 20px 0;">
+            <button onclick="testConnection()">Test Connection</button>
+            <button onclick="loadCustomers()">Load Customers</button>
+            <button onclick="loadTrafficData()">Load Traffic Data</button>
+            <button onclick="addTestCustomer()">Add Test Customer</button>
+        </div>
+
+        <div id="results"></div>
+    </div>
+
+    <script>
+        // Initialize Supabase client with your credentials
+        const supabaseUrl = 'https://dsnfnjhuixkpllnyixmi.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRzbmZuamh1aXhrcGxsbnlpeG1pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI1NzkzOTMsImV4cCI6MjA3ODE1NTM5M30.JrFtG4tSyUWZ4JlbT2ZY1E6Wj5Z9r15_evzCaU14cHo';
+        
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+        function updateStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+        }
+
+        function displayResults(data, title) {
+            const resultsDiv = document.getElementById('results');
+            
+            if (!data || data.length === 0) {
+                resultsDiv.innerHTML = `<h3>${title}</h3><p>No data found.</p>`;
+                return;
+            }
+
+            let html = `<h3>${title}</h3>`;
+            html += '<table class="data-table"><thead><tr>';
+            
+            // Create headers
+            Object.keys(data[0]).forEach(key => {
+                html += `<th>${key}</th>`;
+            });
+            html += '</tr></thead><tbody>';
+            
+            // Create rows
+            data.forEach(row => {
+                html += '<tr>';
+                Object.values(row).forEach(value => {
+                    html += `<td>${value}</td>`;
+                });
+                html += '</tr>';
+            });
+            
+            html += '</tbody></table>';
+            resultsDiv.innerHTML = html;
+        }
+
+        async function testConnection() {
+            updateStatus('Testing Supabase connection...', 'info');
+            
+            try {
+                const { data, error } = await supabase
+                    .from('customers')
+                    .select('count', { count: 'exact', head: true });
+                
+                if (error) {
+                    throw error;
+                }
+                
+                updateStatus('✅ Supabase connection successful!', 'success');
+                document.getElementById('results').innerHTML = `
+                    <h3>Connection Details</h3>
+                    <p><strong>Project URL:</strong> ${supabaseUrl}</p>
+                    <p><strong>Status:</strong> Connected</p>
+                    <p><strong>Tables:</strong> Ready to query</p>
+                `;
+            } catch (error) {
+                updateStatus(`❌ Connection failed: ${error.message}`, 'error');
+                console.error('Connection error:', error);
+            }
+        }
+
+        async function loadCustomers() {
+            updateStatus('Loading customers...', 'info');
+            
+            try {
+                const { data, error } = await supabase
+                    .from('customers')
+                    .select('*')
+                    .order('created_at', { ascending: false });
+                
+                if (error) {
+                    throw error;
+                }
+                
+                updateStatus(`✅ Loaded ${data.length} customers`, 'success');
+                displayResults(data, 'Customers Data');
+            } catch (error) {
+                updateStatus(`❌ Failed to load customers: ${error.message}`, 'error');
+                console.error('Load customers error:', error);
+            }
+        }
+
+        async function loadTrafficData() {
+            updateStatus('Loading traffic data...', 'info');
+            
+            try {
+                const { data, error } = await supabase
+                    .from('traffic_data')
+                    .select('*')
+                    .order('date', { ascending: false });
+                
+                if (error) {
+                    throw error;
+                }
+                
+                updateStatus(`✅ Loaded ${data.length} traffic records`, 'success');
+                displayResults(data, 'Traffic Data');
+            } catch (error) {
+                updateStatus(`❌ Failed to load traffic data: ${error.message}`, 'error');
+                console.error('Load traffic data error:', error);
+            }
+        }
+
+        async function addTestCustomer() {
+            updateStatus('Adding test customer...', 'info');
+            
+            const testCustomer = {
+                customer_name: 'Test Company ' + Date.now(),
+                office_name: 'Test Office',
+                service_type: 'Premium',
+                customer_id: 'TEST' + Date.now(),
+                contract_id: 'CONT' + Date.now()
+            };
+            
+            try {
+                const { data, error } = await supabase
+                    .from('customers')
+                    .insert([testCustomer])
+                    .select();
+                
+                if (error) {
+                    throw error;
+                }
+                
+                updateStatus('✅ Test customer added successfully!', 'success');
+                displayResults(data, 'New Customer Added');
+            } catch (error) {
+                updateStatus(`❌ Failed to add customer: ${error.message}`, 'error');
+                console.error('Add customer error:', error);
+            }
+        }
+
+        // Auto-test connection on page load
+        window.onload = function() {
+            setTimeout(testConnection, 1000);
+        };
+    </script>
+</body>
+</html>

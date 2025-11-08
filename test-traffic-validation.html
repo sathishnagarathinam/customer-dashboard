@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Traffic Data Validation</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        .warning { background-color: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+        
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #6c757d; cursor: not-allowed; }
+        
+        pre {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .test-section {
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .validation-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+        
+        .validation-table th,
+        .validation-table td {
+            border: 1px solid #dee2e6;
+            padding: 8px 12px;
+            text-align: left;
+        }
+        
+        .validation-table th {
+            background-color: #f8f9fa;
+            font-weight: bold;
+        }
+        
+        .error-row {
+            background-color: #f8d7da;
+        }
+        
+        .valid-row {
+            background-color: #d4edda;
+        }
+        
+        .validation-demo {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚦 Traffic Data Validation Test</h1>
+        <p>Testing Customer ID validation and duplicate traffic entry prevention during Excel upload process.</p>
+        
+        <div id="status" class="status info">
+            Ready to test traffic data validation...
+        </div>
+
+        <div style="margin: 20px 0;">
+            <button onclick="testExcelFileDuplicates()">📄 Test Excel File Duplicates</button>
+            <button onclick="testCustomerIdValidation()">👤 Test Customer ID Validation</button>
+            <button onclick="testDatabaseDuplicates()">🗄️ Test Database Duplicates</button>
+            <button onclick="simulateTrafficUpload()">📤 Simulate Upload Process</button>
+            <button onclick="clearResults()">🧹 Clear Results</button>
+        </div>
+
+        <div id="results"></div>
+    </div>
+
+    <script>
+        // Initialize Supabase client
+        const supabaseUrl = 'https://dsnfnjhuixkpllnyixmi.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRzbmZuamh1aXhrcGxsbnlpeG1pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI1NzkzOTMsImV4cCI6MjA3ODE1NTM5M30.JrFtG4tSyUWZ4JlbT2ZY1E6Wj5Z9r15_evzCaU14cHo';
+        
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+        function updateStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+        }
+
+        function displayResults(title, data, type = 'info') {
+            const resultsDiv = document.getElementById('results');
+            const typeClass = type === 'success' ? 'success' : type === 'error' ? 'error' : type === 'warning' ? 'warning' : 'info';
+            resultsDiv.innerHTML += `
+                <div class="test-section">
+                    <h3 style="color: ${type === 'success' ? '#155724' : type === 'error' ? '#721c24' : type === 'warning' ? '#856404' : '#0c5460'}">${title}</h3>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                </div>
+            `;
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+
+        function testExcelFileDuplicates() {
+            updateStatus('Testing Excel file duplicate detection for traffic data...', 'info');
+            
+            // Simulate Excel data with duplicate Customer ID + Date combinations
+            const excelData = [
+                { 'Customer ID': 'CUST001', 'Date': '2024-01-15', 'Traffic': 1000, 'Revenue': 5000, 'Service Type': 'Premium' },
+                { 'Customer ID': 'CUST002', 'Date': '2024-01-16', 'Traffic': 2000, 'Revenue': 8000, 'Service Type': 'Standard' },
+                { 'Customer ID': 'CUST001', 'Date': '2024-01-15', 'Traffic': 1500, 'Revenue': 6000, 'Service Type': 'Premium' }, // Duplicate Customer ID + Date
+                { 'Customer ID': 'CUST003', 'Date': '2024-01-17', 'Traffic': 3000, 'Revenue': 12000, 'Service Type': 'Enterprise' },
+                { 'Customer ID': 'CUST002', 'Date': '2024-01-16', 'Traffic': 2500, 'Revenue': 9000, 'Service Type': 'Standard' } // Duplicate Customer ID + Date
+            ];
+
+            // Simulate the validation logic for Customer ID + Date duplicates
+            const customerDateTracker = new Map();
+            const errors = [];
+
+            excelData.forEach((row, index) => {
+                const rowNumber = index + 2; // Excel row number (accounting for header)
+                const customerId = String(row['Customer ID'] || '').trim();
+                const dateValue = row['Date'];
+                
+                if (customerId && dateValue) {
+                    const parsedDate = new Date(dateValue);
+                    if (!isNaN(parsedDate.getTime())) {
+                        const dateString = parsedDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+                        const customerDateKey = `${customerId}|${dateString}`;
+
+                        if (customerDateTracker.has(customerDateKey)) {
+                            customerDateTracker.get(customerDateKey).push(rowNumber);
+                        } else {
+                            customerDateTracker.set(customerDateKey, [rowNumber]);
+                        }
+                    }
+                }
+            });
+
+            // Check for duplicates within the Excel file
+            customerDateTracker.forEach((rows, customerDateKey) => {
+                if (rows.length > 1) {
+                    const [customerId, date] = customerDateKey.split('|');
+                    errors.push(`Duplicate traffic entry for Customer ID "${customerId}" on date "${date}" found in Excel file at rows: ${rows.join(', ')}`);
+                }
+            });
+
+            const testResults = {
+                testType: 'Excel File Duplicate Detection (Customer ID + Date)',
+                totalRows: excelData.length,
+                duplicatesFound: errors.length > 0,
+                duplicateErrors: errors,
+                duplicateDetails: Array.from(customerDateTracker.entries()).filter(([key, rows]) => rows.length > 1),
+                validation: errors.length > 0 ? 'FAILED - Duplicates detected' : 'PASSED - No duplicates found'
+            };
+
+            displayResults('📄 Excel File Duplicate Test Results', testResults, errors.length > 0 ? 'error' : 'success');
+
+            // Create visual table showing the data with duplicates highlighted
+            let tableHTML = `
+                <table class="validation-table">
+                    <thead>
+                        <tr>
+                            <th>Row</th>
+                            <th>Customer ID</th>
+                            <th>Date</th>
+                            <th>Traffic</th>
+                            <th>Revenue</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            excelData.forEach((row, index) => {
+                const rowNumber = index + 2;
+                const customerId = row['Customer ID'];
+                const date = row['Date'];
+                const dateString = new Date(date).toISOString().split('T')[0];
+                const customerDateKey = `${customerId}|${dateString}`;
+                
+                const isDuplicate = customerDateTracker.get(customerDateKey)?.length > 1;
+                const status = isDuplicate ? 'Duplicate Customer ID + Date' : 'Valid';
+
+                tableHTML += `
+                    <tr class="${isDuplicate ? 'error-row' : 'valid-row'}">
+                        <td>${rowNumber}</td>
+                        <td>${customerId}</td>
+                        <td>${date}</td>
+                        <td>${row['Traffic']}</td>
+                        <td>$${row['Revenue'].toLocaleString()}</td>
+                        <td>${status}</td>
+                    </tr>
+                `;
+            });
+
+            tableHTML += `
+                    </tbody>
+                </table>
+            `;
+
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML += `
+                <div class="test-section">
+                    <h3 style="color: #721c24">📊 Excel Data with Duplicate Highlighting</h3>
+                    ${tableHTML}
+                    <div class="validation-demo">
+                        <p><strong>🚫 Validation Result:</strong> ${errors.length > 0 ? 'Upload would be PREVENTED' : 'Upload would be ALLOWED'}</p>
+                        ${errors.length > 0 ? `<p><strong>Errors:</strong></p><ul>${errors.map(error => `<li>${error}</li>`).join('')}</ul>` : ''}
+                    </div>
+                </div>
+            `;
+
+            updateStatus(`Excel file duplicate test completed - ${errors.length > 0 ? 'duplicates found!' : 'no duplicates found!'}`, errors.length > 0 ? 'error' : 'success');
+        }
+
+        async function testCustomerIdValidation() {
+            updateStatus('Testing Customer ID validation against customer table...', 'info');
+            
+            try {
+                // Get some existing customers from the database
+                const { data: existingCustomers, error: fetchError } = await supabase
+                    .from('customers')
+                    .select('customer_id, customer_name')
+                    .limit(3);
+
+                if (fetchError) {
+                    throw new Error(`Failed to fetch existing customers: ${fetchError.message}`);
+                }
+
+                if (!existingCustomers || existingCustomers.length === 0) {
+                    displayResults('⚠️ Customer ID Validation Test', { 
+                        warning: 'No existing customers found in database. Please upload some customers first to test Customer ID validation.' 
+                    }, 'warning');
+                    updateStatus('Customer ID validation test skipped - no existing customers found', 'warning');
+                    return;
+                }
+
+                // Create test traffic data with mix of valid and invalid Customer IDs
+                const testTrafficData = [
+                    {
+                        customerId: existingCustomers[0].customer_id, // Valid Customer ID
+                        date: new Date('2024-01-15'),
+                        trafficVolume: 1000,
+                        revenue: 5000,
+                        serviceType: 'Premium'
+                    },
+                    {
+                        customerId: 'INVALID_CUST_001', // Invalid Customer ID
+                        date: new Date('2024-01-16'),
+                        trafficVolume: 2000,
+                        revenue: 8000,
+                        serviceType: 'Standard'
+                    },
+                    {
+                        customerId: existingCustomers.length > 1 ? existingCustomers[1].customer_id : existingCustomers[0].customer_id, // Valid Customer ID
+                        date: new Date('2024-01-17'),
+                        trafficVolume: 3000,
+                        revenue: 12000,
+                        serviceType: 'Enterprise'
+                    },
+                    {
+                        customerId: 'INVALID_CUST_002', // Invalid Customer ID
+                        date: new Date('2024-01-18'),
+                        trafficVolume: 1500,
+                        revenue: 6000,
+                        serviceType: 'Premium'
+                    }
+                ];
+
+                // Simulate Customer ID validation
+                const uniqueCustomerIds = [...new Set(testTrafficData.map(t => t.customerId))];
+                const existingCustomerIds = new Set(existingCustomers.map(c => c.customer_id));
+
+                const validationErrors = [];
+                testTrafficData.forEach((traffic, index) => {
+                    const rowNumber = index + 2; // Excel row number (accounting for header)
+                    
+                    if (!existingCustomerIds.has(traffic.customerId)) {
+                        validationErrors.push(`Row ${rowNumber}: Customer ID "${traffic.customerId}" does not exist in the customer table`);
+                    }
+                });
+
+                const testResults = {
+                    testType: 'Customer ID Validation',
+                    existingCustomersInDb: existingCustomers.length,
+                    testDataRows: testTrafficData.length,
+                    invalidCustomerIds: validationErrors.length > 0,
+                    validationErrors: validationErrors,
+                    existingCustomerIds: Array.from(existingCustomerIds),
+                    testCustomerIds: uniqueCustomerIds,
+                    validation: validationErrors.length > 0 ? 'FAILED - Invalid Customer IDs detected' : 'PASSED - All Customer IDs valid'
+                };
+
+                displayResults('👤 Customer ID Validation Test Results', testResults, validationErrors.length > 0 ? 'error' : 'success');
+
+                updateStatus(`Customer ID validation test completed - ${validationErrors.length > 0 ? 'invalid Customer IDs found!' : 'all Customer IDs valid!'}`, validationErrors.length > 0 ? 'error' : 'success');
+
+            } catch (error) {
+                displayResults('❌ Customer ID Validation Test Failed', { error: error.message }, 'error');
+                updateStatus(`Customer ID validation test failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function testDatabaseDuplicates() {
+            updateStatus('Testing database duplicate detection for traffic entries...', 'info');
+            
+            try {
+                // Get some existing traffic data from the database
+                const { data: existingTraffic, error: fetchError } = await supabase
+                    .from('traffic_data')
+                    .select('customer_id, date')
+                    .limit(3);
+
+                if (fetchError) {
+                    throw new Error(`Failed to fetch existing traffic data: ${fetchError.message}`);
+                }
+
+                if (!existingTraffic || existingTraffic.length === 0) {
+                    displayResults('⚠️ Database Duplicate Test', { 
+                        warning: 'No existing traffic data found in database. Please upload some traffic data first to test duplicate detection.' 
+                    }, 'warning');
+                    updateStatus('Database duplicate test skipped - no existing traffic data found', 'warning');
+                    return;
+                }
+
+                // Create test data that includes existing Customer ID + Date combinations
+                const testTrafficData = [
+                    {
+                        customerId: existingTraffic[0].customer_id,
+                        date: new Date(existingTraffic[0].date), // This should be detected as duplicate
+                        trafficVolume: 1000,
+                        revenue: 5000,
+                        serviceType: 'Premium'
+                    },
+                    {
+                        customerId: 'NEW_CUST_001',
+                        date: new Date('2024-12-01'), // This should be valid (new combination)
+                        trafficVolume: 2000,
+                        revenue: 8000,
+                        serviceType: 'Standard'
+                    }
+                ];
+
+                // Simulate database duplicate check
+                const duplicateErrors = [];
+                for (let i = 0; i < testTrafficData.length; i++) {
+                    const traffic = testTrafficData[i];
+                    const rowNumber = i + 2;
+                    const dateString = traffic.date.toISOString().split('T')[0];
+                    
+                    // Check if this Customer ID + Date combination exists
+                    const { data: existingEntry, error: checkError } = await supabase
+                        .from('traffic_data')
+                        .select('customer_id, date')
+                        .eq('customer_id', traffic.customerId)
+                        .eq('date', dateString)
+                        .limit(1);
+
+                    if (checkError) {
+                        throw new Error(`Failed to check existing traffic data: ${checkError.message}`);
+                    }
+
+                    if (existingEntry && existingEntry.length > 0) {
+                        duplicateErrors.push(`Row ${rowNumber}: Traffic entry for Customer ID "${traffic.customerId}" on date "${dateString}" already exists in the system`);
+                    }
+                }
+
+                const testResults = {
+                    testType: 'Database Duplicate Detection (Customer ID + Date)',
+                    existingTrafficInDb: existingTraffic.length,
+                    testDataRows: testTrafficData.length,
+                    duplicatesFound: duplicateErrors.length > 0,
+                    duplicateErrors: duplicateErrors,
+                    existingTrafficEntries: existingTraffic,
+                    testData: testTrafficData,
+                    validation: duplicateErrors.length > 0 ? 'FAILED - Database duplicates detected' : 'PASSED - No database duplicates found'
+                };
+
+                displayResults('🗄️ Database Duplicate Test Results', testResults, duplicateErrors.length > 0 ? 'error' : 'success');
+
+                updateStatus(`Database duplicate test completed - ${duplicateErrors.length > 0 ? 'duplicates found!' : 'no duplicates found!'}`, duplicateErrors.length > 0 ? 'error' : 'success');
+
+            } catch (error) {
+                displayResults('❌ Database Duplicate Test Failed', { error: error.message }, 'error');
+                updateStatus(`Database duplicate test failed: ${error.message}`, 'error');
+            }
+        }
+
+        function simulateTrafficUpload() {
+            updateStatus('Simulating complete traffic upload process with validation...', 'info');
+            
+            const simulationResults = {
+                processSteps: [
+                    '1. Parse Excel file and validate required fields',
+                    '2. Check for duplicate Customer ID + Date combinations within Excel file',
+                    '3. Validate all Customer IDs exist in customer table',
+                    '4. Check for duplicate Customer ID + Date combinations in database',
+                    '5. If validation errors found: PREVENT upload and show detailed errors',
+                    '6. If no validation errors: Proceed with database insertion'
+                ],
+                validationTypes: {
+                    excelFileDuplicates: 'Same Customer ID + Date within Excel file',
+                    customerIdValidation: 'Customer ID must exist in customer table',
+                    databaseDuplicates: 'Customer ID + Date combination must not exist in database'
+                },
+                errorHandling: {
+                    preventUpload: 'Upload is completely prevented when validation errors are found',
+                    detailedErrors: 'Show specific row numbers and validation issues',
+                    userGuidance: 'Provide actionable steps to fix the Excel file'
+                },
+                benefits: [
+                    'Prevents duplicate traffic entries for same customer on same date',
+                    'Ensures referential integrity with customer table',
+                    'Maintains data quality and consistency',
+                    'Provides clear error messages for quick resolution',
+                    'Prevents partial uploads with mixed success/failure'
+                ]
+            };
+
+            displayResults('📤 Traffic Upload Process Simulation', simulationResults, 'info');
+
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML += `
+                <div class="test-section">
+                    <h3 style="color: #0c5460">🔄 Validation Flow</h3>
+                    <div class="validation-demo">
+                        <h4>🆕 Enhanced Traffic Validation:</h4>
+                        <ol>
+                            <li><strong>Excel File Parsing:</strong> Validate required fields (Customer ID, Date, Traffic, Revenue, Service Type)</li>
+                            <li><strong>Excel Duplicate Check:</strong> Prevent same Customer ID + Date within the file</li>
+                            <li><strong>Customer ID Validation:</strong> Ensure all Customer IDs exist in customer table</li>
+                            <li><strong>Database Duplicate Check:</strong> Prevent duplicate Customer ID + Date combinations</li>
+                            <li><strong>Upload Decision:</strong> Only proceed if all validations pass</li>
+                        </ol>
+                        
+                        <h4>📋 Example Error Messages:</h4>
+                        <ul>
+                            <li>"Row 3: Customer ID 'CUST001' does not exist in the customer table"</li>
+                            <li>"Row 5: Traffic entry for Customer ID 'CUST002' on date '2024-01-15' already exists in the system"</li>
+                            <li>"Duplicate traffic entry for Customer ID 'CUST003' on date '2024-01-16' found in Excel file at rows: 4, 7"</li>
+                        </ul>
+                        
+                        <p><strong>✅ Result:</strong> Complete data integrity with clear, actionable error messages.</p>
+                    </div>
+                </div>
+            `;
+
+            updateStatus('Traffic upload process simulation completed!', 'success');
+        }
+
+        // Auto-run tests on page load
+        window.onload = function() {
+            setTimeout(() => {
+                testExcelFileDuplicates();
+                setTimeout(() => {
+                    testCustomerIdValidation();
+                    setTimeout(() => {
+                        testDatabaseDuplicates();
+                        setTimeout(() => {
+                            simulateTrafficUpload();
+                        }, 1000);
+                    }, 1000);
+                }, 1000);
+            }, 500);
+        };
+    </script>
+</body>
+</html>

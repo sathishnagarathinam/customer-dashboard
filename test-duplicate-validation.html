@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Duplicate Validation</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        .warning { background-color: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+        
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #6c757d; cursor: not-allowed; }
+        
+        pre {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .test-section {
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .duplicate-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+        
+        .duplicate-table th,
+        .duplicate-table td {
+            border: 1px solid #dee2e6;
+            padding: 8px 12px;
+            text-align: left;
+        }
+        
+        .duplicate-table th {
+            background-color: #f8f9fa;
+            font-weight: bold;
+        }
+        
+        .duplicate-row {
+            background-color: #f8d7da;
+        }
+        
+        .validation-demo {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚫 Duplicate Validation Test</h1>
+        <p>Testing Customer ID and Contract ID duplicate validation during Excel upload process.</p>
+        
+        <div id="status" class="status info">
+            Ready to test duplicate validation...
+        </div>
+
+        <div style="margin: 20px 0;">
+            <button onclick="testExcelFileDuplicates()">📄 Test Excel File Duplicates</button>
+            <button onclick="testDatabaseDuplicates()">🗄️ Test Database Duplicates</button>
+            <button onclick="simulateUploadProcess()">📤 Simulate Upload Process</button>
+            <button onclick="clearResults()">🧹 Clear Results</button>
+        </div>
+
+        <div id="results"></div>
+    </div>
+
+    <script>
+        // Initialize Supabase client
+        const supabaseUrl = 'https://dsnfnjhuixkpllnyixmi.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRzbmZuamh1aXhrcGxsbnlpeG1pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI1NzkzOTMsImV4cCI6MjA3ODE1NTM5M30.JrFtG4tSyUWZ4JlbT2ZY1E6Wj5Z9r15_evzCaU14cHo';
+        
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+        function updateStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+        }
+
+        function displayResults(title, data, type = 'info') {
+            const resultsDiv = document.getElementById('results');
+            const typeClass = type === 'success' ? 'success' : type === 'error' ? 'error' : type === 'warning' ? 'warning' : 'info';
+            resultsDiv.innerHTML += `
+                <div class="test-section">
+                    <h3 style="color: ${type === 'success' ? '#155724' : type === 'error' ? '#721c24' : type === 'warning' ? '#856404' : '#0c5460'}">${title}</h3>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                </div>
+            `;
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+
+        function testExcelFileDuplicates() {
+            updateStatus('Testing Excel file duplicate detection...', 'info');
+            
+            // Simulate Excel data with duplicates within the file
+            const excelData = [
+                { 'Customer Name': 'Customer A', 'Office Name': 'NYC Office', 'Service Type': 'Premium', 'Customer ID': 'CUST001', 'Contract ID': 'CONT001' },
+                { 'Customer Name': 'Customer B', 'Office Name': 'LA Office', 'Service Type': 'Standard', 'Customer ID': 'CUST002', 'Contract ID': 'CONT002' },
+                { 'Customer Name': 'Customer C', 'Office Name': 'Chicago Office', 'Service Type': 'Enterprise', 'Customer ID': 'CUST001', 'Contract ID': 'CONT003' }, // Duplicate Customer ID
+                { 'Customer Name': 'Customer D', 'Office Name': 'Miami Office', 'Service Type': 'Premium', 'Customer ID': 'CUST004', 'Contract ID': 'CONT002' }, // Duplicate Contract ID
+                { 'Customer Name': 'Customer E', 'Office Name': 'Seattle Office', 'Service Type': 'Standard', 'Customer ID': 'CUST005', 'Contract ID': 'CONT005' }
+            ];
+
+            // Simulate the validation logic
+            const customerIdTracker = new Map();
+            const contractIdTracker = new Map();
+            const errors = [];
+
+            excelData.forEach((row, index) => {
+                const rowNumber = index + 2; // Excel row number (accounting for header)
+                const customerId = String(row['Customer ID'] || '').trim();
+                const contractId = String(row['Contract ID'] || '').trim();
+
+                if (customerId) {
+                    if (customerIdTracker.has(customerId)) {
+                        customerIdTracker.get(customerId).push(rowNumber);
+                    } else {
+                        customerIdTracker.set(customerId, [rowNumber]);
+                    }
+                }
+
+                if (contractId) {
+                    if (contractIdTracker.has(contractId)) {
+                        contractIdTracker.get(contractId).push(rowNumber);
+                    } else {
+                        contractIdTracker.set(contractId, [rowNumber]);
+                    }
+                }
+            });
+
+            // Check for duplicates within the Excel file
+            customerIdTracker.forEach((rows, customerId) => {
+                if (rows.length > 1) {
+                    errors.push(`Duplicate Customer ID "${customerId}" found in Excel file at rows: ${rows.join(', ')}`);
+                }
+            });
+
+            contractIdTracker.forEach((rows, contractId) => {
+                if (rows.length > 1) {
+                    errors.push(`Duplicate Contract ID "${contractId}" found in Excel file at rows: ${rows.join(', ')}`);
+                }
+            });
+
+            const testResults = {
+                testType: 'Excel File Duplicate Detection',
+                totalRows: excelData.length,
+                duplicatesFound: errors.length > 0,
+                duplicateErrors: errors,
+                duplicateDetails: {
+                    customerIdDuplicates: Array.from(customerIdTracker.entries()).filter(([id, rows]) => rows.length > 1),
+                    contractIdDuplicates: Array.from(contractIdTracker.entries()).filter(([id, rows]) => rows.length > 1)
+                },
+                validation: errors.length > 0 ? 'FAILED - Duplicates detected' : 'PASSED - No duplicates found'
+            };
+
+            displayResults('📄 Excel File Duplicate Test Results', testResults, errors.length > 0 ? 'error' : 'success');
+
+            // Create visual table showing the data with duplicates highlighted
+            let tableHTML = `
+                <table class="duplicate-table">
+                    <thead>
+                        <tr>
+                            <th>Row</th>
+                            <th>Customer Name</th>
+                            <th>Customer ID</th>
+                            <th>Contract ID</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            excelData.forEach((row, index) => {
+                const rowNumber = index + 2;
+                const customerId = row['Customer ID'];
+                const contractId = row['Contract ID'];
+                
+                const isDuplicateCustomerId = customerIdTracker.get(customerId)?.length > 1;
+                const isDuplicateContractId = contractIdTracker.get(contractId)?.length > 1;
+                const isDuplicate = isDuplicateCustomerId || isDuplicateContractId;
+                
+                let status = 'Valid';
+                if (isDuplicateCustomerId && isDuplicateContractId) {
+                    status = 'Duplicate Customer ID & Contract ID';
+                } else if (isDuplicateCustomerId) {
+                    status = 'Duplicate Customer ID';
+                } else if (isDuplicateContractId) {
+                    status = 'Duplicate Contract ID';
+                }
+
+                tableHTML += `
+                    <tr class="${isDuplicate ? 'duplicate-row' : ''}">
+                        <td>${rowNumber}</td>
+                        <td>${row['Customer Name']}</td>
+                        <td>${customerId}</td>
+                        <td>${contractId}</td>
+                        <td>${status}</td>
+                    </tr>
+                `;
+            });
+
+            tableHTML += `
+                    </tbody>
+                </table>
+            `;
+
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML += `
+                <div class="test-section">
+                    <h3 style="color: #721c24">📊 Excel Data with Duplicate Highlighting</h3>
+                    ${tableHTML}
+                    <div class="validation-demo">
+                        <p><strong>🚫 Validation Result:</strong> ${errors.length > 0 ? 'Upload would be PREVENTED' : 'Upload would be ALLOWED'}</p>
+                        ${errors.length > 0 ? `<p><strong>Errors:</strong></p><ul>${errors.map(error => `<li>${error}</li>`).join('')}</ul>` : ''}
+                    </div>
+                </div>
+            `;
+
+            updateStatus(`Excel file duplicate test completed - ${errors.length > 0 ? 'duplicates found!' : 'no duplicates found!'}`, errors.length > 0 ? 'error' : 'success');
+        }
+
+        async function testDatabaseDuplicates() {
+            updateStatus('Testing database duplicate detection...', 'info');
+            
+            try {
+                // First, get some existing customers from the database
+                const { data: existingCustomers, error: fetchError } = await supabase
+                    .from('customers')
+                    .select('customer_id, contract_id, customer_name')
+                    .limit(3);
+
+                if (fetchError) {
+                    throw new Error(`Failed to fetch existing customers: ${fetchError.message}`);
+                }
+
+                if (!existingCustomers || existingCustomers.length === 0) {
+                    displayResults('⚠️ Database Duplicate Test', { 
+                        warning: 'No existing customers found in database. Please upload some customers first to test duplicate detection.' 
+                    }, 'warning');
+                    updateStatus('Database duplicate test skipped - no existing customers found', 'warning');
+                    return;
+                }
+
+                // Create test data that includes existing Customer IDs and Contract IDs
+                const testCustomerData = [
+                    {
+                        customerName: 'New Customer A',
+                        officeName: 'Test Office',
+                        serviceType: 'Premium',
+                        customerId: existingCustomers[0].customer_id, // This should be detected as duplicate
+                        contractId: 'NEW_CONT_001'
+                    },
+                    {
+                        customerName: 'New Customer B',
+                        officeName: 'Test Office',
+                        serviceType: 'Standard',
+                        customerId: 'NEW_CUST_001',
+                        contractId: existingCustomers[0].contract_id // This should be detected as duplicate
+                    },
+                    {
+                        customerName: 'New Customer C',
+                        officeName: 'Test Office',
+                        serviceType: 'Enterprise',
+                        customerId: 'NEW_CUST_002',
+                        contractId: 'NEW_CONT_002' // This should be valid
+                    }
+                ];
+
+                // Simulate the database duplicate check
+                const customerIds = testCustomerData.map(c => c.customerId);
+                const contractIds = testCustomerData.map(c => c.contractId);
+
+                // Check for existing Customer IDs
+                const { data: existingCustomerIds, error: customerError } = await supabase
+                    .from('customers')
+                    .select('customer_id')
+                    .in('customer_id', customerIds);
+
+                if (customerError) {
+                    throw new Error(`Failed to check existing Customer IDs: ${customerError.message}`);
+                }
+
+                // Check for existing Contract IDs
+                const { data: existingContractIds, error: contractError } = await supabase
+                    .from('customers')
+                    .select('contract_id, customer_id')
+                    .in('contract_id', contractIds);
+
+                if (contractError) {
+                    throw new Error(`Failed to check existing Contract IDs: ${contractError.message}`);
+                }
+
+                // Create sets for faster lookup
+                const existingCustomerIdSet = new Set(existingCustomerIds?.map(c => c.customer_id) || []);
+                const existingContractIdSet = new Set(existingContractIds?.map(c => c.contract_id) || []);
+
+                // Check for duplicates and collect error messages
+                const duplicateErrors = [];
+                testCustomerData.forEach((customer, index) => {
+                    const rowNumber = index + 2; // Excel row number (accounting for header)
+                    
+                    if (existingCustomerIdSet.has(customer.customerId)) {
+                        duplicateErrors.push(`Row ${rowNumber}: Customer ID "${customer.customerId}" already exists in the system`);
+                    }
+                    
+                    if (existingContractIdSet.has(customer.contractId)) {
+                        duplicateErrors.push(`Row ${rowNumber}: Contract ID "${customer.contractId}" already exists in the system`);
+                    }
+                });
+
+                const testResults = {
+                    testType: 'Database Duplicate Detection',
+                    existingCustomersInDb: existingCustomers.length,
+                    testDataRows: testCustomerData.length,
+                    duplicatesFound: duplicateErrors.length > 0,
+                    duplicateErrors: duplicateErrors,
+                    existingCustomerIds: Array.from(existingCustomerIdSet),
+                    existingContractIds: Array.from(existingContractIdSet),
+                    testData: testCustomerData,
+                    validation: duplicateErrors.length > 0 ? 'FAILED - Database duplicates detected' : 'PASSED - No database duplicates found'
+                };
+
+                displayResults('🗄️ Database Duplicate Test Results', testResults, duplicateErrors.length > 0 ? 'error' : 'success');
+
+                updateStatus(`Database duplicate test completed - ${duplicateErrors.length > 0 ? 'duplicates found!' : 'no duplicates found!'}`, duplicateErrors.length > 0 ? 'error' : 'success');
+
+            } catch (error) {
+                displayResults('❌ Database Duplicate Test Failed', { error: error.message }, 'error');
+                updateStatus(`Database duplicate test failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function simulateUploadProcess() {
+            updateStatus('Simulating complete upload process with duplicate validation...', 'info');
+            
+            // This simulates the complete upload process including both Excel and database validation
+            const simulationResults = {
+                processSteps: [
+                    '1. Parse Excel file',
+                    '2. Validate required fields',
+                    '3. Check for duplicates within Excel file',
+                    '4. Check for duplicates in database',
+                    '5. If duplicates found: PREVENT upload and show errors',
+                    '6. If no duplicates: Proceed with database insertion'
+                ],
+                newBehavior: {
+                    duplicateHandling: 'PREVENT upload when duplicates detected',
+                    errorReporting: 'Show specific row numbers and duplicate IDs',
+                    userAction: 'User must correct Excel file and retry upload'
+                },
+                oldBehavior: {
+                    duplicateHandling: 'Automatically skip existing customers',
+                    errorReporting: 'Show count of skipped records',
+                    userAction: 'No action required from user'
+                },
+                benefits: [
+                    'Prevents accidental duplicate entries',
+                    'Maintains data integrity',
+                    'Forces explicit user decision on duplicates',
+                    'Clear error messages with row numbers',
+                    'Prevents partial uploads with mixed success/failure'
+                ]
+            };
+
+            displayResults('📤 Upload Process Simulation', simulationResults, 'info');
+
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML += `
+                <div class="test-section">
+                    <h3 style="color: #0c5460">🔄 Process Flow Comparison</h3>
+                    <div class="validation-demo">
+                        <h4>🆕 New Behavior (Duplicate Prevention):</h4>
+                        <ol>
+                            <li>Parse Excel file and validate fields</li>
+                            <li>Check for duplicates within Excel file</li>
+                            <li>Check for duplicates against database</li>
+                            <li><strong>If duplicates found:</strong> STOP upload and show detailed errors</li>
+                            <li><strong>If no duplicates:</strong> Insert all records successfully</li>
+                        </ol>
+                        
+                        <h4>🔄 Old Behavior (Automatic Skip):</h4>
+                        <ol>
+                            <li>Parse Excel file and validate fields</li>
+                            <li>Check for existing customers in database</li>
+                            <li>Skip existing customers, insert only new ones</li>
+                            <li>Show count of inserted vs skipped records</li>
+                        </ol>
+                        
+                        <p><strong>✅ Improvement:</strong> New behavior ensures data integrity and requires explicit user action for duplicate resolution.</p>
+                    </div>
+                </div>
+            `;
+
+            updateStatus('Upload process simulation completed!', 'success');
+        }
+
+        // Auto-run tests on page load
+        window.onload = function() {
+            setTimeout(() => {
+                testExcelFileDuplicates();
+                setTimeout(() => {
+                    testDatabaseDuplicates();
+                    setTimeout(() => {
+                        simulateUploadProcess();
+                    }, 1000);
+                }, 1000);
+            }, 500);
+        };
+    </script>
+</body>
+</html>

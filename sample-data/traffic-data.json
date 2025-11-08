@@ -1,0 +1,72 @@
+[
+  {
+    "customerId": "TECH001",
+    "date": "2024-01-15",
+    "trafficVolume": 15000,
+    "revenue": 7500.00,
+    "serviceType": "Premium"
+  },
+  {
+    "customerId": "GLOB001",
+    "date": "2024-01-15",
+    "trafficVolume": 8000,
+    "revenue": 3200.00,
+    "serviceType": "Standard"
+  },
+  {
+    "customerId": "INNO001",
+    "date": "2024-01-15",
+    "trafficVolume": 25000,
+    "revenue": 15000.00,
+    "serviceType": "Enterprise"
+  },
+  {
+    "customerId": "METR001",
+    "date": "2024-01-15",
+    "trafficVolume": 5000,
+    "revenue": 1500.00,
+    "serviceType": "Basic"
+  },
+  {
+    "customerId": "DIGI001",
+    "date": "2024-01-15",
+    "trafficVolume": 12000,
+    "revenue": 6000.00,
+    "serviceType": "Premium"
+  },
+  {
+    "customerId": "TECH001",
+    "date": "2024-01-16",
+    "trafficVolume": 16500,
+    "revenue": 8250.00,
+    "serviceType": "Premium"
+  },
+  {
+    "customerId": "GLOB001",
+    "date": "2024-01-16",
+    "trafficVolume": 7500,
+    "revenue": 3000.00,
+    "serviceType": "Standard"
+  },
+  {
+    "customerId": "INNO001",
+    "date": "2024-01-16",
+    "trafficVolume": 28000,
+    "revenue": 16800.00,
+    "serviceType": "Enterprise"
+  },
+  {
+    "customerId": "METR001",
+    "date": "2024-01-16",
+    "trafficVolume": 4800,
+    "revenue": 1440.00,
+    "serviceType": "Basic"
+  },
+  {
+    "customerId": "DIGI001",
+    "date": "2024-01-16",
+    "trafficVolume": 13200,
+    "revenue": 6600.00,
+    "serviceType": "Premium"
+  }
+]

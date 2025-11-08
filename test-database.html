@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Database Table Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        pre {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Database Table Structure Test</h1>
+        
+        <div id="status" class="status info">
+            Ready to test database tables...
+        </div>
+
+        <div style="margin: 20px 0;">
+            <button onclick="testCustomersTable()">Test Customers Table</button>
+            <button onclick="testTrafficTable()">Test Traffic Data Table</button>
+            <button onclick="testInsertTraffic()">Test Insert Traffic Record</button>
+            <button onclick="clearResults()">Clear Results</button>
+        </div>
+
+        <div id="results"></div>
+    </div>
+
+    <script>
+        // Initialize Supabase client
+        const supabaseUrl = 'https://dsnfnjhuixkpllnyixmi.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRzbmZuamh1aXhrcGxsbnlpeG1pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI1NzkzOTMsImV4cCI6MjA3ODE1NTM5M30.JrFtG4tSyUWZ4JlbT2ZY1E6Wj5Z9r15_evzCaU14cHo';
+        
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+        function updateStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+        }
+
+        function displayResults(title, data) {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML += `
+                <h3>${title}</h3>
+                <pre>${JSON.stringify(data, null, 2)}</pre>
+            `;
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+
+        async function testCustomersTable() {
+            updateStatus('Testing customers table...', 'info');
+            
+            try {
+                // Test table structure
+                const { data, error } = await supabase
+                    .from('customers')
+                    .select('*')
+                    .limit(1);
+                
+                if (error) {
+                    throw error;
+                }
+                
+                updateStatus('✅ Customers table accessible', 'success');
+                displayResults('Customers Table Sample', data);
+                
+                // Test count
+                const { count, error: countError } = await supabase
+                    .from('customers')
+                    .select('*', { count: 'exact', head: true });
+                
+                if (!countError) {
+                    displayResults('Customers Count', { total_records: count });
+                }
+                
+            } catch (error) {
+                updateStatus(`❌ Customers table error: ${error.message}`, 'error');
+                displayResults('Customers Table Error', error);
+            }
+        }
+
+        async function testTrafficTable() {
+            updateStatus('Testing traffic_data table...', 'info');
+            
+            try {
+                // Test table structure
+                const { data, error } = await supabase
+                    .from('traffic_data')
+                    .select('*')
+                    .limit(1);
+                
+                if (error) {
+                    throw error;
+                }
+                
+                updateStatus('✅ Traffic data table accessible', 'success');
+                displayResults('Traffic Data Table Sample', data);
+                
+                // Test count
+                const { count, error: countError } = await supabase
+                    .from('traffic_data')
+                    .select('*', { count: 'exact', head: true });
+                
+                if (!countError) {
+                    displayResults('Traffic Data Count', { total_records: count });
+                }
+                
+            } catch (error) {
+                updateStatus(`❌ Traffic data table error: ${error.message}`, 'error');
+                displayResults('Traffic Data Table Error', error);
+            }
+        }
+
+        async function testInsertTraffic() {
+            updateStatus('Testing traffic data insert...', 'info');
+            
+            try {
+                const testRecord = {
+                    customer_id: 'TEST001',
+                    date: '2024-01-01',
+                    traffic_volume: 0,
+                    revenue: 0.00,
+                    service_type: 'Test',
+                    created_at: new Date().toISOString()
+                };
+                
+                console.log('Inserting test record:', testRecord);
+                
+                const { data, error } = await supabase
+                    .from('traffic_data')
+                    .insert([testRecord])
+                    .select();
+                
+                if (error) {
+                    throw error;
+                }
+                
+                updateStatus('✅ Traffic data insert successful', 'success');
+                displayResults('Inserted Record', data);
+                
+                // Clean up - delete the test record
+                if (data && data[0]) {
+                    await supabase
+                        .from('traffic_data')
+                        .delete()
+                        .eq('id', data[0].id);
+                    displayResults('Cleanup', { message: 'Test record deleted' });
+                }
+                
+            } catch (error) {
+                updateStatus(`❌ Traffic data insert error: ${error.message}`, 'error');
+                displayResults('Insert Error Details', {
+                    message: error.message,
+                    details: error.details,
+                    hint: error.hint,
+                    code: error.code
+                });
+            }
+        }
+
+        // Auto-test on page load
+        window.onload = function() {
+            setTimeout(() => {
+                testCustomersTable();
+                setTimeout(() => {
+                    testTrafficTable();
+                }, 1000);
+            }, 500);
+        };
+    </script>
+</body>
+</html>

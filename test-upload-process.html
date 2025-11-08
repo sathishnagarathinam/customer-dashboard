@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Upload Process</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        pre {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Test Upload Process</h1>
+        
+        <div id="status" class="status info">
+            Ready to test upload process...
+        </div>
+
+        <div style="margin: 20px 0;">
+            <button onclick="step1_CreateTestCustomers()">Step 1: Create Test Customers</button>
+            <button onclick="step2_TestTrafficUpload()">Step 2: Test Traffic Upload</button>
+            <button onclick="step3_CleanupTest()">Step 3: Cleanup Test Data</button>
+            <button onclick="runFullTest()">🚀 Run Full Test</button>
+        </div>
+
+        <div id="results"></div>
+    </div>
+
+    <script>
+        // Initialize Supabase client
+        const supabaseUrl = 'https://dsnfnjhuixkpllnyixmi.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRzbmZuamh1aXhrcGxsbnlpeG1pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI1NzkzOTMsImV4cCI6MjA3ODE1NTM5M30.JrFtG4tSyUWZ4JlbT2ZY1E6Wj5Z9r15_evzCaU14cHo';
+        
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+        function updateStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+        }
+
+        function displayResults(title, data) {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML += `
+                <h3>${title}</h3>
+                <pre>${JSON.stringify(data, null, 2)}</pre>
+            `;
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+
+        async function step1_CreateTestCustomers() {
+            updateStatus('Step 1: Creating test customers...', 'info');
+            
+            try {
+                const testCustomers = [
+                    {
+                        customer_name: 'Test Customer 1',
+                        office_name: 'Test Office 1',
+                        service_type: 'Premium',
+                        customer_id: 'TEST001',
+                        contract_id: 'CONT001'
+                    },
+                    {
+                        customer_name: 'Test Customer 2',
+                        office_name: 'Test Office 2',
+                        service_type: 'Standard',
+                        customer_id: 'TEST002',
+                        contract_id: 'CONT002'
+                    }
+                ];
+
+                const { data, error } = await supabase
+                    .from('customers')
+                    .upsert(testCustomers, { onConflict: 'customer_id' })
+                    .select();
+
+                if (error) throw error;
+
+                displayResults('✅ Test Customers Created', data);
+                updateStatus('✅ Step 1 complete: Test customers created', 'success');
+                return true;
+
+            } catch (error) {
+                displayResults('❌ Step 1 Failed', error);
+                updateStatus(`❌ Step 1 failed: ${error.message}`, 'error');
+                return false;
+            }
+        }
+
+        async function step2_TestTrafficUpload() {
+            updateStatus('Step 2: Testing traffic data upload...', 'info');
+            
+            try {
+                // Simulate the traffic service bulk upload
+                const testTrafficData = [
+                    {
+                        customerId: 'TEST001',
+                        date: new Date('2024-01-01'),
+                        trafficVolume: 1000,
+                        revenue: 5000.00,
+                        serviceType: 'Premium'
+                    },
+                    {
+                        customerId: 'TEST002',
+                        date: new Date('2024-01-02'),
+                        trafficVolume: 0, // Test zero values
+                        revenue: 0.00,
+                        serviceType: 'Standard'
+                    }
+                ];
+
+                // Simulate the same logic as trafficService.bulkCreateTrafficData
+                console.log('Testing bulk create with data:', testTrafficData);
+
+                // Check existing customers
+                const uniqueCustomerIds = [...new Set(testTrafficData.map(data => data.customerId))];
+                console.log('Checking for customers:', uniqueCustomerIds);
+
+                const { data: existingCustomers, error: customerError } = await supabase
+                    .from('customers')
+                    .select('customer_id')
+                    .in('customer_id', uniqueCustomerIds);
+
+                if (customerError) throw customerError;
+
+                const existingCustomerIds = new Set(existingCustomers?.map(c => c.customer_id) || []);
+                console.log('Found existing customers:', Array.from(existingCustomerIds));
+
+                // Filter valid data
+                const validTrafficData = testTrafficData.filter(data => existingCustomerIds.has(data.customerId));
+                console.log('Valid traffic data:', validTrafficData);
+
+                if (validTrafficData.length === 0) {
+                    throw new Error('No valid traffic data - customers not found');
+                }
+
+                // Transform data for insert
+                const insertData = validTrafficData.map(data => ({
+                    customer_id: data.customerId,
+                    date: data.date.toISOString().split('T')[0],
+                    traffic_volume: Number(data.trafficVolume) || 0,
+                    revenue: Number(data.revenue) || 0,
+                    service_type: data.serviceType,
+                    created_at: new Date().toISOString()
+                }));
+
+                console.log('Inserting data:', insertData);
+
+                const { data: insertedData, error: insertError } = await supabase
+                    .from('traffic_data')
+                    .insert(insertData)
+                    .select();
+
+                if (insertError) throw insertError;
+
+                displayResults('✅ Traffic Data Upload Test', {
+                    message: `Successfully imported ${insertedData.length} out of ${testTrafficData.length} records`,
+                    inserted_data: insertedData
+                });
+
+                updateStatus(`✅ Step 2 complete: ${insertedData.length} records uploaded successfully`, 'success');
+                return insertedData;
+
+            } catch (error) {
+                displayResults('❌ Step 2 Failed', error);
+                updateStatus(`❌ Step 2 failed: ${error.message}`, 'error');
+                return false;
+            }
+        }
+
+        async function step3_CleanupTest() {
+            updateStatus('Step 3: Cleaning up test data...', 'info');
+            
+            try {
+                // Delete test traffic data
+                const { error: trafficError } = await supabase
+                    .from('traffic_data')
+                    .delete()
+                    .in('customer_id', ['TEST001', 'TEST002']);
+
+                if (trafficError) throw trafficError;
+
+                // Delete test customers
+                const { error: customerError } = await supabase
+                    .from('customers')
+                    .delete()
+                    .in('customer_id', ['TEST001', 'TEST002']);
+
+                if (customerError) throw customerError;
+
+                displayResults('✅ Cleanup Complete', { message: 'Test data removed' });
+                updateStatus('✅ Step 3 complete: Test data cleaned up', 'success');
+                return true;
+
+            } catch (error) {
+                displayResults('❌ Step 3 Failed', error);
+                updateStatus(`❌ Step 3 failed: ${error.message}`, 'error');
+                return false;
+            }
+        }
+
+        async function runFullTest() {
+            clearResults();
+            updateStatus('Running full upload test...', 'info');
+            
+            const step1Success = await step1_CreateTestCustomers();
+            if (!step1Success) return;
+
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
+            const step2Success = await step2_TestTrafficUpload();
+            if (!step2Success) return;
+
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
+            const step3Success = await step3_CleanupTest();
+            
+            if (step1Success && step2Success && step3Success) {
+                updateStatus('🎉 Full test completed successfully! Upload process is working.', 'success');
+            } else {
+                updateStatus('❌ Test failed - there are issues with the upload process', 'error');
+            }
+        }
+
+        // Auto-run test on page load
+        window.onload = function() {
+            setTimeout(runFullTest, 500);
+        };
+    </script>
+</body>
+</html>

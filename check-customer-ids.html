@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Check Customer IDs in Excel</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .upload-area {
+            border: 2px dashed #ccc;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            margin: 20px 0;
+            cursor: pointer;
+            transition: border-color 0.3s;
+        }
+        .upload-area:hover {
+            border-color: #007bff;
+        }
+        .upload-area.dragover {
+            border-color: #007bff;
+            background-color: #f8f9fa;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .results {
+            margin-top: 20px;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
+        .customer-list {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        .sql-output {
+            background-color: #2d3748;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .copy-btn {
+            background-color: #28a745;
+            margin-top: 10px;
+        }
+        .copy-btn:hover {
+            background-color: #218838;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Extract Customer IDs from Traffic Data</h1>
+        <p>Upload your traffic data Excel file to see what customer IDs you need to create.</p>
+        
+        <div class="upload-area" id="uploadArea">
+            <p>📁 Drop your Excel file here or click to browse</p>
+            <input type="file" id="fileInput" accept=".xlsx,.xls" style="display: none;">
+        </div>
+        
+        <div id="results" class="results" style="display: none;">
+            <h3>📊 Analysis Results</h3>
+            <div id="summary"></div>
+            
+            <h4>🆔 Unique Customer IDs Found:</h4>
+            <div id="customerList" class="customer-list"></div>
+            
+            <h4>📝 SQL Script to Create Missing Customers:</h4>
+            <div id="sqlOutput" class="sql-output"></div>
+            <button class="copy-btn" onclick="copySql()">📋 Copy SQL Script</button>
+        </div>
+    </div>
+
+    <script>
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const results = document.getElementById('results');
+        let generatedSql = '';
+
+        // Upload area click handler
+        uploadArea.addEventListener('click', () => fileInput.click());
+
+        // Drag and drop handlers
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+
+        // File input change handler
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+
+        function handleFile(file) {
+            if (!file.name.match(/\.(xlsx|xls)$/)) {
+                alert('Please upload a valid Excel file (.xlsx or .xls)');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[sheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet);
+                    
+                    analyzeCustomerIds(jsonData);
+                } catch (error) {
+                    alert('Error reading Excel file: ' + error.message);
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function analyzeCustomerIds(data) {
+            const customerIds = new Set();
+            const invalidRows = [];
+
+            data.forEach((row, index) => {
+                const customerId = row['Customer ID'] || row['customerId'];
+                if (customerId) {
+                    customerIds.add(customerId);
+                } else {
+                    invalidRows.push(index + 2); // Excel row number
+                }
+            });
+
+            const uniqueCustomerIds = Array.from(customerIds).sort();
+            
+            // Display results
+            document.getElementById('summary').innerHTML = `
+                <p><strong>Total Records:</strong> ${data.length}</p>
+                <p><strong>Unique Customer IDs:</strong> ${uniqueCustomerIds.length}</p>
+                <p><strong>Records with missing Customer ID:</strong> ${invalidRows.length}</p>
+            `;
+
+            document.getElementById('customerList').innerHTML = 
+                uniqueCustomerIds.map(id => `<div>• ${id}</div>`).join('');
+
+            // Generate SQL script
+            generatedSql = generateCustomerSql(uniqueCustomerIds);
+            document.getElementById('sqlOutput').textContent = generatedSql;
+            
+            results.style.display = 'block';
+        }
+
+        function generateCustomerSql(customerIds) {
+            const sqlLines = [
+                '-- Auto-generated SQL to create customers for traffic data',
+                '-- Run this in your Supabase SQL Editor',
+                '',
+                'INSERT INTO customers (customer_name, office_name, service_type, customer_id, contract_id) VALUES'
+            ];
+
+            const values = customerIds.map((id, index) => {
+                const isLast = index === customerIds.length - 1;
+                return `('Customer ${id}', 'Office ${id}', 'Standard', '${id}', 'CONT${Date.now()}${index}')${isLast ? '' : ','}`;
+            });
+
+            sqlLines.push(...values);
+            sqlLines.push('ON CONFLICT (customer_id) DO NOTHING;');
+            sqlLines.push('');
+            sqlLines.push('-- Verify customers were created:');
+            sqlLines.push('SELECT customer_id, customer_name FROM customers ORDER BY customer_id;');
+
+            return sqlLines.join('\n');
+        }
+
+        function copySql() {
+            navigator.clipboard.writeText(generatedSql).then(() => {
+                const btn = event.target;
+                const originalText = btn.textContent;
+                btn.textContent = '✅ Copied!';
+                btn.style.backgroundColor = '#28a745';
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.style.backgroundColor = '#28a745';
+                }, 2000);
+            });
+        }
+    </script>
+</body>
+</html>

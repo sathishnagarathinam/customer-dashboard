@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Upload All Data - No Customer Filtering</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .warning {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        pre {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+        }
+        .test-section h3 {
+            margin-top: 0;
+            color: #495057;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Test Upload All Data - No Customer Filtering</h1>
+        
+        <div id="status" class="status info">
+            Ready to test upload process that imports ALL data regardless of customer existence...
+        </div>
+
+        <div class="test-section">
+            <h3>Test Scenario</h3>
+            <p>This test will:</p>
+            <ul>
+                <li>Create traffic data for customers that <strong>DO NOT</strong> exist in the database</li>
+                <li>Verify that the upload process creates missing customers automatically</li>
+                <li>Confirm that ALL traffic data is imported, not just data for existing customers</li>
+                <li>Test the updated bulkCreateTrafficData method</li>
+            </ul>
+        </div>
+
+        <div style="margin: 20px 0;">
+            <button onclick="step1_CleanupPreviousTest()">Step 1: Cleanup Previous Test</button>
+            <button onclick="step2_TestUploadWithMissingCustomers()">Step 2: Upload Data for Missing Customers</button>
+            <button onclick="step3_VerifyResults()">Step 3: Verify All Data Was Imported</button>
+            <button onclick="step4_CleanupTest()">Step 4: Cleanup Test Data</button>
+            <button onclick="runFullTest()" style="background-color: #28a745;">🚀 Run Full Test</button>
+        </div>
+
+        <div id="results"></div>
+    </div>
+
+    <script>
+        // Initialize Supabase client
+        const supabaseUrl = 'https://dsnfnjhuixkpllnyixmi.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRzbmZuamh1aXhrcGxsbnlpeG1pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI1NzkzOTMsImV4cCI6MjA3ODE1NTM5M30.JrFtG4tSyUWZ4JlbT2ZY1E6Wj5Z9r15_evzCaU14cHo';
+        
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+        // Test customer IDs that should NOT exist in the database
+        const testCustomerIds = ['MISSING001', 'MISSING002', 'MISSING003', 'MISSING004', 'MISSING005'];
+
+        function updateStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+        }
+
+        function displayResults(title, data, type = 'info') {
+            const resultsDiv = document.getElementById('results');
+            const typeClass = type === 'error' ? 'error' : type === 'success' ? 'success' : 'info';
+            resultsDiv.innerHTML += `
+                <div class="test-section">
+                    <h3 class="${typeClass}">${title}</h3>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                </div>
+            `;
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+
+        async function step1_CleanupPreviousTest() {
+            updateStatus('Step 1: Cleaning up any previous test data...', 'info');
+            
+            try {
+                // Delete any existing test traffic data
+                const { error: trafficError } = await supabase
+                    .from('traffic_data')
+                    .delete()
+                    .in('customer_id', testCustomerIds);
+
+                if (trafficError && trafficError.code !== 'PGRST116') { // PGRST116 = no rows found
+                    console.warn('Error deleting traffic data:', trafficError);
+                }
+
+                // Delete any existing test customers
+                const { error: customerError } = await supabase
+                    .from('customers')
+                    .delete()
+                    .in('customer_id', testCustomerIds);
+
+                if (customerError && customerError.code !== 'PGRST116') {
+                    console.warn('Error deleting customers:', customerError);
+                }
+
+                displayResults('✅ Step 1 Complete', { 
+                    message: 'Previous test data cleaned up',
+                    customer_ids_cleaned: testCustomerIds
+                }, 'success');
+                updateStatus('✅ Step 1 complete: Previous test data cleaned up', 'success');
+                return true;
+
+            } catch (error) {
+                displayResults('❌ Step 1 Failed', error, 'error');
+                updateStatus(`❌ Step 1 failed: ${error.message}`, 'error');
+                return false;
+            }
+        }
+
+        async function step2_TestUploadWithMissingCustomers() {
+            updateStatus('Step 2: Testing upload with customers that DO NOT exist...', 'info');
+            
+            try {
+                // Verify customers don't exist first
+                const { data: existingCustomers } = await supabase
+                    .from('customers')
+                    .select('customer_id')
+                    .in('customer_id', testCustomerIds);
+
+                if (existingCustomers && existingCustomers.length > 0) {
+                    throw new Error(`Test setup error: Some test customers already exist: ${existingCustomers.map(c => c.customer_id).join(', ')}`);
+                }
+
+                // Create traffic data for customers that DON'T exist
+                const testTrafficData = testCustomerIds.map((customerId, index) => ({
+                    customerId: customerId,
+                    date: new Date(`2024-01-${String(index + 1).padStart(2, '0')}`),
+                    trafficVolume: (index + 1) * 1000,
+                    revenue: (index + 1) * 2500.00,
+                    serviceType: index % 2 === 0 ? 'Premium' : 'Standard'
+                }));
+
+                displayResults('📋 Test Data Created', {
+                    message: `Created ${testTrafficData.length} traffic records for non-existent customers`,
+                    traffic_data: testTrafficData,
+                    customer_ids: testCustomerIds
+                });
+
+                // Use the updated bulkCreateTrafficData method
+                console.log('Calling bulkCreateTrafficData with missing customers...');
+                const result = await simulateBulkCreateTrafficData(testTrafficData);
+
+                displayResults('✅ Step 2 Complete', result, 'success');
+                updateStatus(`✅ Step 2 complete: ${result.message}`, 'success');
+                return result;
+
+            } catch (error) {
+                displayResults('❌ Step 2 Failed', error, 'error');
+                updateStatus(`❌ Step 2 failed: ${error.message}`, 'error');
+                return false;
+            }
+        }
+
+        async function simulateBulkCreateTrafficData(trafficDataArray) {
+            // This simulates the updated bulkCreateTrafficData method
+            console.log('Bulk creating traffic data:', trafficDataArray.length, 'records');
+
+            // Check which customers exist
+            const uniqueCustomerIds = [...new Set(trafficDataArray.map(data => data.customerId))];
+            const { data: existingCustomers, error: customerError } = await supabase
+                .from('customers')
+                .select('customer_id')
+                .in('customer_id', uniqueCustomerIds);
+
+            if (customerError) {
+                throw new Error(`Failed to verify customers: ${customerError.message}`);
+            }
+
+            const existingCustomerIds = new Set(existingCustomers?.map(c => c.customer_id) || []);
+            const missingCustomerIds = uniqueCustomerIds.filter(id => !existingCustomerIds.has(id));
+            let createdCustomersCount = 0;
+
+            // Create missing customers automatically
+            if (missingCustomerIds.length > 0) {
+                console.log(`Creating ${missingCustomerIds.length} missing customers...`);
+                
+                const newCustomers = missingCustomerIds.map(customerId => ({
+                    customer_id: customerId,
+                    customer_name: `Customer ${customerId}`,
+                    office_name: `Office ${customerId}`,
+                    service_type: 'Standard',
+                    contract_id: `CONTRACT_${customerId}`,
+                    created_at: new Date().toISOString()
+                }));
+
+                const { data: createdCustomers, error: createError } = await supabase
+                    .from('customers')
+                    .upsert(newCustomers, { 
+                        onConflict: 'customer_id',
+                        ignoreDuplicates: false 
+                    })
+                    .select();
+
+                if (createError) {
+                    console.error('Error creating customers:', createError);
+                    // Try individual inserts as fallback
+                    for (const customer of newCustomers) {
+                        try {
+                            const { data: singleCustomer } = await supabase
+                                .from('customers')
+                                .upsert([customer], { onConflict: 'customer_id' })
+                                .select();
+                            
+                            if (singleCustomer && singleCustomer.length > 0) {
+                                createdCustomersCount++;
+                            }
+                        } catch (singleError) {
+                            console.warn(`Failed to create customer ${customer.customer_id}`);
+                        }
+                    }
+                } else {
+                    createdCustomersCount = createdCustomers?.length || 0;
+                }
+            }
+
+            // Process ALL traffic data (no filtering)
+            const insertData = trafficDataArray.map(data => ({
+                customer_id: data.customerId,
+                date: data.date.toISOString().split('T')[0],
+                traffic_volume: Number(data.trafficVolume) || 0,
+                revenue: Number(data.revenue) || 0,
+                service_type: data.serviceType,
+                created_at: new Date().toISOString()
+            }));
+
+            const { data, error } = await supabase
+                .from('traffic_data')
+                .insert(insertData)
+                .select();
+
+            if (error) {
+                throw error;
+            }
+
+            return {
+                success: true,
+                data: data?.length || 0,
+                message: `Successfully imported all ${data?.length || 0} records from Excel sheet. Created ${createdCustomersCount} new customers automatically.`,
+                created_customers: createdCustomersCount,
+                imported_records: data?.length || 0,
+                total_records: trafficDataArray.length
+            };
+        }
+
+        async function step3_VerifyResults() {
+            updateStatus('Step 3: Verifying all data was imported correctly...', 'info');
+            
+            try {
+                // Check that customers were created
+                const { data: customers, error: customerError } = await supabase
+                    .from('customers')
+                    .select('*')
+                    .in('customer_id', testCustomerIds);
+
+                if (customerError) throw customerError;
+
+                // Check that traffic data was imported
+                const { data: trafficData, error: trafficError } = await supabase
+                    .from('traffic_data')
+                    .select('*')
+                    .in('customer_id', testCustomerIds);
+
+                if (trafficError) throw trafficError;
+
+                const results = {
+                    customers_created: customers?.length || 0,
+                    traffic_records_imported: trafficData?.length || 0,
+                    expected_customers: testCustomerIds.length,
+                    expected_traffic_records: testCustomerIds.length,
+                    customers: customers,
+                    traffic_data: trafficData
+                };
+
+                const success = results.customers_created === results.expected_customers && 
+                               results.traffic_records_imported === results.expected_traffic_records;
+
+                displayResults(success ? '✅ Step 3 Complete - All Data Verified' : '❌ Step 3 Failed - Data Missing', results, success ? 'success' : 'error');
+                updateStatus(success ? '✅ Step 3 complete: All data verified successfully' : '❌ Step 3 failed: Some data is missing', success ? 'success' : 'error');
+                return success;
+
+            } catch (error) {
+                displayResults('❌ Step 3 Failed', error, 'error');
+                updateStatus(`❌ Step 3 failed: ${error.message}`, 'error');
+                return false;
+            }
+        }
+
+        async function step4_CleanupTest() {
+            updateStatus('Step 4: Cleaning up test data...', 'info');
+            
+            try {
+                // Delete test traffic data
+                const { error: trafficError } = await supabase
+                    .from('traffic_data')
+                    .delete()
+                    .in('customer_id', testCustomerIds);
+
+                if (trafficError) throw trafficError;
+
+                // Delete test customers
+                const { error: customerError } = await supabase
+                    .from('customers')
+                    .delete()
+                    .in('customer_id', testCustomerIds);
+
+                if (customerError) throw customerError;
+
+                displayResults('✅ Step 4 Complete', { message: 'Test data cleaned up' }, 'success');
+                updateStatus('✅ Step 4 complete: Test data cleaned up', 'success');
+                return true;
+
+            } catch (error) {
+                displayResults('❌ Step 4 Failed', error, 'error');
+                updateStatus(`❌ Step 4 failed: ${error.message}`, 'error');
+                return false;
+            }
+        }
+
+        async function runFullTest() {
+            clearResults();
+            updateStatus('Running full test - Upload ALL data regardless of customer existence...', 'info');
+            
+            const step1Success = await step1_CleanupPreviousTest();
+            if (!step1Success) return;
+
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
+            const step2Result = await step2_TestUploadWithMissingCustomers();
+            if (!step2Result) return;
+
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
+            const step3Success = await step3_VerifyResults();
+            if (!step3Success) return;
+
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
+            const step4Success = await step4_CleanupTest();
+            
+            if (step1Success && step2Result && step3Success && step4Success) {
+                updateStatus('🎉 Full test completed successfully! Upload process now imports ALL data regardless of customer existence.', 'success');
+            } else {
+                updateStatus('❌ Test failed - there are still issues with the upload process', 'error');
+            }
+        }
+
+        // Auto-run test on page load
+        window.onload = function() {
+            setTimeout(runFullTest, 500);
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,37 @@
+[
+  {
+    "customerName": "TechCorp Solutions",
+    "officeName": "Downtown Branch",
+    "serviceType": "Premium",
+    "customerId": "TECH001",
+    "contractId": "CONT2024001"
+  },
+  {
+    "customerName": "Global Industries",
+    "officeName": "North Office",
+    "serviceType": "Standard",
+    "customerId": "GLOB001",
+    "contractId": "CONT2024002"
+  },
+  {
+    "customerName": "Innovation Labs",
+    "officeName": "Tech Park",
+    "serviceType": "Enterprise",
+    "customerId": "INNO001",
+    "contractId": "CONT2024003"
+  },
+  {
+    "customerName": "Metro Services",
+    "officeName": "Central Hub",
+    "serviceType": "Basic",
+    "customerId": "METR001",
+    "contractId": "CONT2024004"
+  },
+  {
+    "customerName": "Digital Dynamics",
+    "officeName": "Silicon Valley",
+    "serviceType": "Premium",
+    "customerId": "DIGI001",
+    "contractId": "CONT2024005"
+  }
+]

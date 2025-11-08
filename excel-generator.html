@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Test Excel File</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .status {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 Create Test Excel File</h1>
+        
+        <div id="status" class="status info">
+            Ready to create test Excel file with traffic data for non-existent customers...
+        </div>
+
+        <div style="margin: 20px 0;">
+            <button onclick="createTestExcel()">Create Test Excel File</button>
+        </div>
+
+        <div id="preview"></div>
+    </div>
+
+    <script>
+        function createTestExcel() {
+            // Create test data with customers that don't exist in the database
+            const testData = [
+                {
+                    'Customer ID': 'EXCEL_TEST_001',
+                    'Date': '2024-01-01',
+                    'Traffic Volume': 1500,
+                    'Revenue': 7500.00,
+                    'Service Type': 'Premium'
+                },
+                {
+                    'Customer ID': 'EXCEL_TEST_002',
+                    'Date': '2024-01-02',
+                    'Traffic Volume': 2000,
+                    'Revenue': 5000.00,
+                    'Service Type': 'Standard'
+                },
+                {
+                    'Customer ID': 'EXCEL_TEST_003',
+                    'Date': '2024-01-03',
+                    'Traffic Volume': 0,
+                    'Revenue': 0.00,
+                    'Service Type': 'Basic'
+                },
+                {
+                    'Customer ID': 'EXCEL_TEST_004',
+                    'Date': '2024-01-04',
+                    'Traffic Volume': 3500,
+                    'Revenue': 12500.00,
+                    'Service Type': 'Premium'
+                },
+                {
+                    'Customer ID': 'EXCEL_TEST_005',
+                    'Date': '2024-01-05',
+                    'Traffic Volume': 1200,
+                    'Revenue': 3600.00,
+                    'Service Type': 'Standard'
+                }
+            ];
+
+            // Show preview
+            showPreview(testData);
+
+            // Create workbook and worksheet
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.json_to_sheet(testData);
+
+            // Add worksheet to workbook
+            XLSX.utils.book_append_sheet(wb, ws, "Traffic Data");
+
+            // Generate Excel file and download
+            XLSX.writeFile(wb, "test-traffic-data.xlsx");
+
+            document.getElementById('status').innerHTML = '✅ Test Excel file created and downloaded!';
+            document.getElementById('status').className = 'status success';
+        }
+
+        function showPreview(data) {
+            const previewDiv = document.getElementById('preview');
+            
+            let tableHTML = '<h3>Preview of Test Data:</h3><table>';
+            
+            // Header row
+            tableHTML += '<tr>';
+            Object.keys(data[0]).forEach(key => {
+                tableHTML += `<th>${key}</th>`;
+            });
+            tableHTML += '</tr>';
+            
+            // Data rows
+            data.forEach(row => {
+                tableHTML += '<tr>';
+                Object.values(row).forEach(value => {
+                    tableHTML += `<td>${value}</td>`;
+                });
+                tableHTML += '</tr>';
+            });
+            
+            tableHTML += '</table>';
+            tableHTML += '<p><strong>Note:</strong> These customer IDs (EXCEL_TEST_001 to EXCEL_TEST_005) should NOT exist in your database. The upload process should create them automatically and import all traffic data.</p>';
+            
+            previewDiv.innerHTML = tableHTML;
+        }
+    </script>
+</body>
+</html>
