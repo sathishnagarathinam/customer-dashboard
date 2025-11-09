@@ -115,7 +115,14 @@ const Reports: React.FC = () => {
         'Report Generated': new Date().toLocaleDateString()
       }];
 
-      // Comprehensive traffic data with full customer information, sorted by revenue (highest first)
+      // Calculate customer total revenues for proper sorting
+      const customerTotalRevenues = new Map<string, number>();
+      reportData.trafficData.forEach(item => {
+        const currentTotal = customerTotalRevenues.get(item.customerId) || 0;
+        customerTotalRevenues.set(item.customerId, currentTotal + item.revenue);
+      });
+
+      // Comprehensive traffic data with full customer information, sorted by customer total revenue (highest first)
       const comprehensiveData = reportData.trafficData
         .map(item => {
           // For the new joined data structure, customer info is already available
@@ -130,14 +137,22 @@ const Reports: React.FC = () => {
             'Traffic Volume': item.trafficVolume,
             'Revenue': item.revenue,
             'Revenue per Traffic': item.trafficVolume > 0 ? (item.revenue / item.trafficVolume).toFixed(2) : '0',
-            // Add revenue as a sortable field
-            _revenue: item.revenue
+            // Add customer total revenue for sorting
+            _customerTotalRevenue: customerTotalRevenues.get(item.customerId) || 0,
+            _individualRevenue: item.revenue
           };
         })
-        .sort((a, b) => b._revenue - a._revenue) // Sort by revenue descending (highest first)
+        .sort((a, b) => {
+          // Primary sort: by customer total revenue (descending)
+          if (a._customerTotalRevenue !== b._customerTotalRevenue) {
+            return b._customerTotalRevenue - a._customerTotalRevenue;
+          }
+          // Secondary sort: by individual record revenue (descending)
+          return b._individualRevenue - a._individualRevenue;
+        })
         .map(item => {
-          // Remove the sorting field from export
-          const { _revenue, ...exportItem } = item;
+          // Remove the sorting fields from export
+          const { _customerTotalRevenue, _individualRevenue, ...exportItem } = item;
           return exportItem;
         });
 
@@ -473,48 +488,68 @@ const Reports: React.FC = () => {
 
           {/* Data Tables */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Customers Summary */}
+            {/* Top Customers by Total Revenue */}
             <div className="card">
               <div className="card-header">
-                <h3 className="text-lg font-medium text-gray-900">Customers ({reportData.customers.length})</h3>
+                <h3 className="text-lg font-medium text-gray-900">
+                  {filters.topCustomersLimit && filters.topCustomersLimit !== 'All Customers'
+                    ? `${filters.topCustomersLimit} by Total Revenue`
+                    : `Top Customers by Total Revenue (${reportData.customers.length})`}
+                </h3>
+                <p className="text-sm text-gray-500 mt-1">Ranked by cumulative revenue across selected date range</p>
               </div>
-              
+
               <div className="overflow-x-auto max-h-96">
                 <table className="table">
                   <thead className="table-header">
                     <tr>
+                      <th>Rank</th>
                       <th>Customer</th>
                       <th>Office</th>
-                      <th>Service</th>
+                      <th>Total Revenue ↓</th>
                     </tr>
                   </thead>
                   <tbody className="table-body">
-                    {reportData.customers.slice(0, 10).map((customer) => (
-                      <tr key={customer.id}>
-                        <td className="font-medium">{customer.customerName}</td>
-                        <td>{customer.officeName}</td>
-                        <td>
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                            {customer.serviceType}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
+                    {(() => {
+                      // Calculate total revenue per customer for ranking display
+                      const customerTotalRevenues = new Map<string, number>();
+                      reportData.trafficData.forEach(item => {
+                        const currentTotal = customerTotalRevenues.get(item.customerId) || 0;
+                        customerTotalRevenues.set(item.customerId, currentTotal + item.revenue);
+                      });
+
+                      // Create customer ranking with total revenue
+                      return reportData.customers
+                        .map(customer => ({
+                          ...customer,
+                          totalRevenue: customerTotalRevenues.get(customer.customerId) || 0
+                        }))
+                        .sort((a, b) => b.totalRevenue - a.totalRevenue) // Sort by total revenue descending
+                        .slice(0, 10)
+                        .map((customer, index) => (
+                          <tr key={customer.id}>
+                            <td className="font-bold text-blue-600">#{index + 1}</td>
+                            <td className="font-medium">{customer.customerName}</td>
+                            <td>{customer.officeName}</td>
+                            <td className="font-bold text-green-600">{formatCurrency(customer.totalRevenue)}</td>
+                          </tr>
+                        ));
+                    })()}
                   </tbody>
                 </table>
                 {reportData.customers.length > 10 && (
                   <p className="text-sm text-gray-500 p-4">
-                    Showing first 10 of {reportData.customers.length} customers
+                    Showing top 10 of {reportData.customers.length} customers by total revenue
                   </p>
                 )}
               </div>
             </div>
 
-            {/* Comprehensive Traffic & Customer Data */}
+            {/* Individual Transaction Records */}
             <div className="card">
               <div className="card-header">
-                <h3 className="text-lg font-medium text-gray-900">Traffic & Customer Data ({reportData.trafficData.length})</h3>
-                <p className="text-sm text-gray-500 mt-1">Sorted by revenue (highest first)</p>
+                <h3 className="text-lg font-medium text-gray-900">Individual Transaction Records ({reportData.trafficData.length})</h3>
+                <p className="text-sm text-gray-500 mt-1">Individual monthly records from top customers</p>
               </div>
 
               <div className="overflow-x-auto max-h-96">
@@ -526,36 +561,55 @@ const Reports: React.FC = () => {
                       <th>Office</th>
                       <th>Service</th>
                       <th>Traffic</th>
-                      <th>Revenue ↓</th>
+                      <th>Revenue</th>
                     </tr>
                   </thead>
                   <tbody className="table-body">
-                    {reportData.trafficData
-                      .sort((a, b) => b.revenue - a.revenue) // Sort by revenue descending (highest first)
-                      .slice(0, 10)
-                      .map((item) => {
-                        // Handle both old and new data structures
-                        const customer = (item as any).customer || reportData.customers.find(c => c.customerId === item.customerId);
-                        return (
-                          <tr key={item.id}>
-                            <td>{item.date.toLocaleDateString()}</td>
-                            <td className="font-medium">{customer?.customerName || item.customerId}</td>
-                            <td>{customer?.officeName || 'Unknown'}</td>
-                            <td>
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                {item.serviceType}
-                              </span>
-                            </td>
-                            <td>{formatNumber(item.trafficVolume)}</td>
-                            <td className="font-medium text-green-600">{formatCurrency(item.revenue)}</td>
-                          </tr>
-                        );
-                      })}
+                    {(() => {
+                      // Calculate customer total revenues for sorting
+                      const customerTotalRevenues = new Map<string, number>();
+                      reportData.trafficData.forEach(item => {
+                        const currentTotal = customerTotalRevenues.get(item.customerId) || 0;
+                        customerTotalRevenues.set(item.customerId, currentTotal + item.revenue);
+                      });
+
+                      // Sort traffic data by customer's total revenue (not individual record revenue)
+                      return reportData.trafficData
+                        .sort((a, b) => {
+                          const totalRevenueA = customerTotalRevenues.get(a.customerId) || 0;
+                          const totalRevenueB = customerTotalRevenues.get(b.customerId) || 0;
+                          // Primary sort: by customer total revenue (descending)
+                          if (totalRevenueA !== totalRevenueB) {
+                            return totalRevenueB - totalRevenueA;
+                          }
+                          // Secondary sort: by individual record revenue (descending)
+                          return b.revenue - a.revenue;
+                        })
+                        .slice(0, 10)
+                        .map((item) => {
+                          // Handle both old and new data structures
+                          const customer = (item as any).customer || reportData.customers.find(c => c.customerId === item.customerId);
+                          return (
+                            <tr key={item.id}>
+                              <td>{item.date.toLocaleDateString()}</td>
+                              <td className="font-medium">{customer?.customerName || item.customerId}</td>
+                              <td>{customer?.officeName || 'Unknown'}</td>
+                              <td>
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                  {item.serviceType}
+                                </span>
+                              </td>
+                              <td>{formatNumber(item.trafficVolume)}</td>
+                              <td className="font-medium text-green-600">{formatCurrency(item.revenue)}</td>
+                            </tr>
+                          );
+                        });
+                    })()}
                   </tbody>
                 </table>
                 {reportData.trafficData.length > 10 && (
                   <p className="text-sm text-gray-500 p-4">
-                    Showing first 10 of {reportData.trafficData.length} records
+                    Showing first 10 of {reportData.trafficData.length} records from top customers
                   </p>
                 )}
               </div>

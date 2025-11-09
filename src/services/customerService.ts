@@ -5,9 +5,27 @@ const CUSTOMERS_TABLE = 'customers';
 
 // Customer CRUD operations
 export const customerService = {
-  // Create a new customer
+  // Create a new customer (contract_id must be unique)
   async createCustomer(customerData: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'>): Promise<ApiResponse<Customer>> {
     try {
+      // Check if contract_id already exists
+      const { data: existingContract, error: checkError } = await supabase
+        .from(CUSTOMERS_TABLE)
+        .select('contract_id, customer_name')
+        .eq('contract_id', customerData.contractId)
+        .single();
+
+      if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = no rows found
+        throw checkError;
+      }
+
+      if (existingContract) {
+        return {
+          success: false,
+          error: `Contract ID "${customerData.contractId}" already exists for customer "${existingContract.customer_name}"`
+        };
+      }
+
       const { data, error } = await supabase
         .from(CUSTOMERS_TABLE)
         .insert([{
@@ -195,25 +213,14 @@ export const customerService = {
     try {
       console.log('Bulk creating customers:', customerDataArray.length, 'records');
 
-      // Check for existing Customer IDs and Contract IDs in database
-      const customerIds = customerDataArray.map(c => c.customerId);
+      // Check for existing Contract IDs in database (contract_id is the unique identifier)
+      // Note: Multiple customer_id entries are allowed, but contract_id must be unique
       const contractIds = customerDataArray.map(c => c.contractId);
-
-      // Check for existing Customer IDs
-      const { data: existingCustomerIds, error: customerError } = await supabase
-        .from(CUSTOMERS_TABLE)
-        .select('customer_id')
-        .in('customer_id', customerIds);
-
-      if (customerError) {
-        console.error('Error checking existing Customer IDs:', customerError);
-        throw new Error(`Failed to check existing Customer IDs: ${customerError.message}`);
-      }
 
       // Check for existing Contract IDs
       const { data: existingContractIds, error: contractError } = await supabase
         .from(CUSTOMERS_TABLE)
-        .select('contract_id, customer_id')
+        .select('contract_id, customer_id, customer_name')
         .in('contract_id', contractIds);
 
       if (contractError) {
@@ -221,40 +228,51 @@ export const customerService = {
         throw new Error(`Failed to check existing Contract IDs: ${contractError.message}`);
       }
 
-      // Create sets for faster lookup
-      const existingCustomerIdSet = new Set(existingCustomerIds?.map(c => c.customer_id) || []);
-      const existingContractIdSet = new Set(existingContractIds?.map(c => c.contract_id) || []);
+      console.log('Existing Contract IDs found:', existingContractIds?.length || 0);
 
-      // Check for duplicates and collect error messages
-      const duplicateErrors: string[] = [];
-      customerDataArray.forEach((customer, index) => {
-        const rowNumber = index + 2; // Excel row number (accounting for header)
+      // Create set for faster lookup of existing contract IDs
+      const existingContractIdSet = new Set(existingContractIds?.map((c: any) => c.contract_id) || []);
 
-        if (existingCustomerIdSet.has(customer.customerId)) {
-          duplicateErrors.push(`Row ${rowNumber}: Customer ID "${customer.customerId}" already exists in the system`);
-        }
+      // Separate new contracts from existing ones
+      const duplicateContractIds: string[] = [];
+      const newCustomers: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'>[] = [];
 
+      customerDataArray.forEach(customer => {
         if (existingContractIdSet.has(customer.contractId)) {
-          duplicateErrors.push(`Row ${rowNumber}: Contract ID "${customer.contractId}" already exists in the system`);
+          duplicateContractIds.push(customer.contractId);
+        } else {
+          newCustomers.push(customer);
         }
       });
 
-      // If duplicates found, prevent upload and return error
-      if (duplicateErrors.length > 0) {
-        console.log('Duplicates found, preventing upload:', duplicateErrors);
+      // If all contracts already exist, return skip message
+      if (duplicateContractIds.length === customerDataArray.length) {
+        const duplicateErrors = [`All Contract IDs already exist: ${duplicateContractIds.join(', ')}`];
+
+        console.log('All contracts already exist, skipping insertion:', duplicateErrors);
+
         return {
-          success: false,
-          data: { inserted: 0, skipped: 0, total: customerDataArray.length, duplicateErrors },
-          error: `Upload prevented due to duplicate IDs. Please correct the following issues and retry:`,
-          message: `Upload prevented: ${duplicateErrors.length} duplicate ID(s) found. Please correct the Excel file and retry.`
+          success: true,
+          message: `Upload completed - all contracts already exist in the system. Skipped ${duplicateContractIds.length} duplicate contracts.`,
+          data: {
+            inserted: 0,
+            skipped: customerDataArray.length,
+            total: customerDataArray.length,
+            duplicateErrors
+          }
         };
       }
 
-      // No duplicates found, proceed with insertion
-      console.log('No duplicates found, proceeding with insertion of', customerDataArray.length, 'customers');
+      // If some duplicates exist, proceed with inserting only new contracts
+      if (duplicateContractIds.length > 0) {
+        console.log(`Found ${duplicateContractIds.length} duplicate contracts, proceeding with ${newCustomers.length} new contracts`);
+      }
 
-      // Prepare data for insertion
-      const insertData = customerDataArray.map(customer => ({
+      // Proceed with insertion of new contracts only
+      console.log('Proceeding with insertion of', newCustomers.length, 'new contracts');
+
+      // Prepare data for insertion (only new contracts)
+      const insertData = newCustomers.map(customer => ({
         customer_name: customer.customerName,
         office_name: customer.officeName,
         service_type: customer.serviceType,
@@ -264,7 +282,7 @@ export const customerService = {
         updated_at: new Date().toISOString()
       }));
 
-      // Insert all customers (no duplicates to worry about)
+      // Insert new customers with conflict resolution on contract_id
       const { data, error } = await supabase
         .from(CUSTOMERS_TABLE)
         .insert(insertData)
@@ -278,10 +296,16 @@ export const customerService = {
       const insertedCount = data?.length || 0;
       console.log('Successfully inserted:', insertedCount, 'customers');
 
+      // Prepare success message
+      let message = `Successfully imported ${insertedCount} customers`;
+      if (duplicateContractIds.length > 0) {
+        message += ` (skipped ${duplicateContractIds.length} existing contracts)`;
+      }
+
       return {
         success: true,
-        data: { inserted: insertedCount, skipped: 0, total: customerDataArray.length },
-        message: `Successfully imported all ${insertedCount} customers. No duplicates found.`
+        data: { inserted: insertedCount, skipped: duplicateContractIds.length, total: customerDataArray.length },
+        message
       };
     } catch (error) {
       console.error('Error bulk creating customers:', error);

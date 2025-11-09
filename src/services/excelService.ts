@@ -98,8 +98,8 @@ export const excelService = {
 
     // Required exact column names: 'Customer Name', 'Office Name', 'Service Type', 'Customer ID', 'Contract ID'
 
-    // Track duplicates within the Excel file itself
-    const customerIdTracker = new Map<string, number[]>();
+    // Track duplicate contract_id within the Excel file itself
+    // Note: Multiple rows with same customer_id are allowed as long as contract_id is different
     const contractIdTracker = new Map<string, number[]>();
 
     data.forEach((row, index) => {
@@ -123,17 +123,10 @@ export const excelService = {
         validationErrors.push({ field: 'Contract ID', message: 'Contract ID is required' });
       }
 
-      // Check for duplicates within the Excel file
+      // Check for duplicate contract_id within the Excel file
+      // Note: Same customer_id is allowed with different contract_id values
       const customerId = String(row['Customer ID'] || '').trim();
       const contractId = String(row['Contract ID'] || '').trim();
-
-      if (customerId) {
-        if (customerIdTracker.has(customerId)) {
-          customerIdTracker.get(customerId)!.push(rowNumber);
-        } else {
-          customerIdTracker.set(customerId, [rowNumber]);
-        }
-      }
 
       if (contractId) {
         if (contractIdTracker.has(contractId)) {
@@ -156,65 +149,47 @@ export const excelService = {
       }
     });
 
-    // Check for duplicates within the Excel file and add errors
-    customerIdTracker.forEach((rows, customerId) => {
-      if (rows.length > 1) {
-        errors.push(`Duplicate Customer ID "${customerId}" found in Excel file at rows: ${rows.join(', ')}`);
-      }
-    });
-
+    // Check for duplicate contract_id within the Excel file and add errors
+    // Note: Multiple customer_id entries are allowed as long as contract_id is unique
     contractIdTracker.forEach((rows, contractId) => {
       if (rows.length > 1) {
-        errors.push(`Duplicate Contract ID "${contractId}" found in Excel file at rows: ${rows.join(', ')}`);
+        errors.push(`Duplicate Contract ID "${contractId}" found in Excel file at rows: ${rows.join(', ')}. Each contract must have a unique Contract ID.`);
       }
     });
 
     return { validData, errors };
   },
 
-  // Check for duplicate Customer IDs and Contract IDs in the database
+  // Check for duplicate Contract IDs in the database
+  // Note: Multiple customer_id entries are allowed, but contract_id must be unique
   async checkDatabaseDuplicates(customerData: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'>[]): Promise<{ duplicateErrors: string[]; hasDuplicates: boolean }> {
     const duplicateErrors: string[] = [];
 
     try {
-      // Extract all Customer IDs and Contract IDs from the data
-      const customerIds = customerData.map(c => c.customerId);
+      // Extract all Contract IDs from the data (contract_id is the unique identifier)
       const contractIds = customerData.map(c => c.contractId);
-
-      // Check for existing Customer IDs in database
-      const { data: existingCustomerIds, error: customerError } = await supabase
-        .from('customers')
-        .select('customer_id')
-        .in('customer_id', customerIds);
-
-      if (customerError) {
-        throw new Error(`Failed to check existing Customer IDs: ${customerError.message}`);
-      }
 
       // Check for existing Contract IDs in database
       const { data: existingContractIds, error: contractError } = await supabase
         .from('customers')
-        .select('contract_id, customer_id')
+        .select('contract_id, customer_id, customer_name')
         .in('contract_id', contractIds);
 
       if (contractError) {
         throw new Error(`Failed to check existing Contract IDs: ${contractError.message}`);
       }
 
-      // Create sets for faster lookup
-      const existingCustomerIdSet = new Set(existingCustomerIds?.map((c: any) => c.customer_id) || []);
+      // Create set for faster lookup of existing contract IDs
       const existingContractIdSet = new Set(existingContractIds?.map((c: any) => c.contract_id) || []);
 
-      // Check each customer record for duplicates and identify row numbers
+      // Check each customer record for duplicate contract IDs and identify row numbers
       customerData.forEach((customer, index) => {
         const rowNumber = index + 2; // Excel row number (accounting for header)
 
-        if (existingCustomerIdSet.has(customer.customerId)) {
-          duplicateErrors.push(`Row ${rowNumber}: Customer ID "${customer.customerId}" already exists in the system`);
-        }
-
         if (existingContractIdSet.has(customer.contractId)) {
-          duplicateErrors.push(`Row ${rowNumber}: Contract ID "${customer.contractId}" already exists in the system`);
+          // Find the existing contract details for better error message
+          const existingContract = existingContractIds?.find((c: any) => c.contract_id === customer.contractId);
+          duplicateErrors.push(`Row ${rowNumber}: Contract ID "${customer.contractId}" already exists in the system (Customer: ${existingContract?.customer_name || existingContract?.customer_id || 'Unknown'})`);
         }
       });
 

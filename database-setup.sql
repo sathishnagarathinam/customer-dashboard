@@ -7,8 +7,8 @@ CREATE TABLE IF NOT EXISTS customers (
   customer_name VARCHAR(255) NOT NULL,
   office_name VARCHAR(255) NOT NULL,
   service_type VARCHAR(100) NOT NULL,
-  customer_id VARCHAR(100) UNIQUE NOT NULL,
-  contract_id VARCHAR(100) NOT NULL,
+  customer_id VARCHAR(100) NOT NULL,
+  contract_id VARCHAR(100) UNIQUE NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -69,7 +69,7 @@ INSERT INTO customers (customer_name, office_name, service_type, customer_id, co
 ('Metro Services', 'Central Hub', 'Basic', 'METR001', 'CONT2024004'),
 ('Digital Dynamics', 'Silicon Valley', 'Premium', 'DIGI001', 'CONT2024005'),
 ('Test Company', 'Test Office', 'Test', 'TEST001', 'CONT2024006')
-ON CONFLICT (customer_id) DO NOTHING;
+ON CONFLICT (contract_id) DO NOTHING;
 
 -- Insert sample traffic data
 INSERT INTO traffic_data (customer_id, date, traffic_volume, revenue, service_type) VALUES

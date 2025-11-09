@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Contract ID Validation</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border-color: #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border-color: #f5c6cb;
+        }
+        .info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border-color: #bee5eb;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        pre {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Contract ID Validation Testing</h1>
+        <p>This page tests the new contract_id-based validation logic for customer uploads.</p>
+        
+        <div style="margin: 20px 0;">
+            <button onclick="testContractIdValidation()">1. Test Contract ID Validation</button>
+            <button onclick="testMultipleCustomersSameId()">2. Test Multiple Customers Same ID</button>
+            <button onclick="testDuplicateContractIds()">3. Test Duplicate Contract IDs</button>
+            <button onclick="testDatabaseConstraints()">4. Test Database Constraints</button>
+            <button onclick="runAllTests()">🚀 Run All Tests</button>
+        </div>
+
+        <div id="results"></div>
+    </div>
+
+    <script>
+        // Initialize Supabase client
+        const supabaseUrl = 'https://dsnfnjhuixkpllnyixmi.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRzbmZuamh1aXhrcGxsbnlpeG1pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI1NzkzOTMsImV4cCI6MjA3ODE1NTM5M30.JrFtG4tSyUWZ4JlbT2ZY1E6Wj5Z9r15_evzCaU14cHo';
+        
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+        function displayResults(title, data, type = 'info') {
+            const resultsDiv = document.getElementById('results');
+            const sectionClass = type === 'error' ? 'error' : type === 'success' ? 'success' : 'info';
+            
+            resultsDiv.innerHTML += `
+                <div class="test-section ${sectionClass}">
+                    <h3>${title}</h3>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                </div>
+            `;
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+
+        // Test 1: Contract ID Validation Logic
+        async function testContractIdValidation() {
+            clearResults();
+            displayResults('🧪 Test 1: Contract ID Validation Logic', 'Testing contract_id as primary unique identifier...', 'info');
+            
+            try {
+                // Sample data with same customer_id but different contract_id (should be valid)
+                const testData = [
+                    {
+                        'Customer Name': 'TechCorp Solutions',
+                        'Office Name': 'Downtown Branch',
+                        'Service Type': 'Premium',
+                        'Customer ID': 'TECH001',
+                        'Contract ID': 'CONT2024100'
+                    },
+                    {
+                        'Customer Name': 'TechCorp Solutions',
+                        'Office Name': 'Downtown Branch', 
+                        'Service Type': 'Standard',
+                        'Customer ID': 'TECH001', // Same customer_id
+                        'Contract ID': 'CONT2024101' // Different contract_id
+                    }
+                ];
+
+                // Simulate validation logic
+                const contractIdTracker = new Map();
+                const errors = [];
+
+                testData.forEach((row, index) => {
+                    const rowNumber = index + 2;
+                    const contractId = String(row['Contract ID'] || '').trim();
+
+                    if (contractId) {
+                        if (contractIdTracker.has(contractId)) {
+                            contractIdTracker.get(contractId).push(rowNumber);
+                        } else {
+                            contractIdTracker.set(contractId, [rowNumber]);
+                        }
+                    }
+                });
+
+                contractIdTracker.forEach((rows, contractId) => {
+                    if (rows.length > 1) {
+                        errors.push(`Duplicate Contract ID "${contractId}" found at rows: ${rows.join(', ')}`);
+                    }
+                });
+
+                displayResults('✅ Validation Result', {
+                    testData,
+                    contractIdTracker: Array.from(contractIdTracker.entries()),
+                    errors,
+                    result: errors.length === 0 ? 'PASS - Same customer_id with different contract_id is allowed' : 'FAIL'
+                }, errors.length === 0 ? 'success' : 'error');
+
+            } catch (error) {
+                displayResults('❌ Test 1 Error', error, 'error');
+            }
+        }
+
+        // Test 2: Multiple Customers Same ID
+        async function testMultipleCustomersSameId() {
+            displayResults('🧪 Test 2: Multiple Customers Same ID', 'Testing multiple service contracts for same customer...', 'info');
+            
+            try {
+                const testData = [
+                    {
+                        customerName: 'Global Industries',
+                        officeName: 'North Office',
+                        serviceType: 'Premium',
+                        customerId: 'GLOB001',
+                        contractId: 'CONT2024200'
+                    },
+                    {
+                        customerName: 'Global Industries',
+                        officeName: 'North Office',
+                        serviceType: 'Enterprise',
+                        customerId: 'GLOB001', // Same customer
+                        contractId: 'CONT2024201' // Different contract
+                    },
+                    {
+                        customerName: 'Global Industries',
+                        officeName: 'South Office',
+                        serviceType: 'Standard',
+                        customerId: 'GLOB001', // Same customer
+                        contractId: 'CONT2024202' // Different contract
+                    }
+                ];
+
+                // Check if this would be valid
+                const contractIds = testData.map(c => c.contractId);
+                const uniqueContractIds = new Set(contractIds);
+                const isValid = contractIds.length === uniqueContractIds.size;
+
+                displayResults('✅ Multiple Contracts Test', {
+                    testData,
+                    totalContracts: contractIds.length,
+                    uniqueContracts: uniqueContractIds.size,
+                    result: isValid ? 'PASS - Multiple contracts per customer allowed' : 'FAIL - Duplicate contracts found'
+                }, isValid ? 'success' : 'error');
+
+            } catch (error) {
+                displayResults('❌ Test 2 Error', error, 'error');
+            }
+        }
+
+        // Test 3: Duplicate Contract IDs
+        async function testDuplicateContractIds() {
+            displayResults('🧪 Test 3: Duplicate Contract IDs', 'Testing duplicate contract_id detection...', 'info');
+            
+            try {
+                const testData = [
+                    {
+                        'Customer Name': 'Customer A',
+                        'Customer ID': 'CUST001',
+                        'Contract ID': 'CONT2024300'
+                    },
+                    {
+                        'Customer Name': 'Customer B',
+                        'Customer ID': 'CUST002',
+                        'Contract ID': 'CONT2024300' // Duplicate contract_id
+                    }
+                ];
+
+                // Simulate validation
+                const contractIdTracker = new Map();
+                const errors = [];
+
+                testData.forEach((row, index) => {
+                    const rowNumber = index + 2;
+                    const contractId = String(row['Contract ID'] || '').trim();
+
+                    if (contractId) {
+                        if (contractIdTracker.has(contractId)) {
+                            contractIdTracker.get(contractId).push(rowNumber);
+                        } else {
+                            contractIdTracker.set(contractId, [rowNumber]);
+                        }
+                    }
+                });
+
+                contractIdTracker.forEach((rows, contractId) => {
+                    if (rows.length > 1) {
+                        errors.push(`Duplicate Contract ID "${contractId}" found at rows: ${rows.join(', ')}`);
+                    }
+                });
+
+                displayResults('✅ Duplicate Detection Test', {
+                    testData,
+                    errors,
+                    result: errors.length > 0 ? 'PASS - Duplicate contract_id correctly detected' : 'FAIL - Should have detected duplicate'
+                }, errors.length > 0 ? 'success' : 'error');
+
+            } catch (error) {
+                displayResults('❌ Test 3 Error', error, 'error');
+            }
+        }
+
+        // Test 4: Database Constraints
+        async function testDatabaseConstraints() {
+            displayResults('🧪 Test 4: Database Constraints', 'Testing database constraint configuration...', 'info');
+            
+            try {
+                // Check current constraints
+                const { data: constraints, error } = await supabase
+                    .rpc('get_table_constraints', { table_name: 'customers' })
+                    .catch(() => {
+                        // Fallback: try to query constraints directly
+                        return supabase
+                            .from('information_schema.table_constraints')
+                            .select('constraint_name, constraint_type')
+                            .eq('table_name', 'customers');
+                    });
+
+                if (error) {
+                    // Alternative approach: try to insert test data to see constraint behavior
+                    const testContractId = `TEST_CONSTRAINT_${Date.now()}`;
+                    
+                    // Try to insert the same contract_id twice
+                    const { data: insert1, error: error1 } = await supabase
+                        .from('customers')
+                        .insert([{
+                            customer_name: 'Test Customer 1',
+                            office_name: 'Test Office',
+                            service_type: 'Test',
+                            customer_id: 'TEST001',
+                            contract_id: testContractId
+                        }])
+                        .select();
+
+                    if (error1) {
+                        displayResults('❌ Database Constraint Test', {
+                            error: error1.message,
+                            result: 'Could not test constraints due to database error'
+                        }, 'error');
+                        return;
+                    }
+
+                    // Try to insert duplicate contract_id
+                    const { data: insert2, error: error2 } = await supabase
+                        .from('customers')
+                        .insert([{
+                            customer_name: 'Test Customer 2',
+                            office_name: 'Test Office',
+                            service_type: 'Test',
+                            customer_id: 'TEST002',
+                            contract_id: testContractId // Same contract_id
+                        }])
+                        .select();
+
+                    // Clean up test data
+                    if (insert1) {
+                        await supabase
+                            .from('customers')
+                            .delete()
+                            .eq('contract_id', testContractId);
+                    }
+
+                    displayResults('✅ Constraint Behavior Test', {
+                        firstInsert: insert1 ? 'SUCCESS' : 'FAILED',
+                        secondInsert: insert2 ? 'SUCCESS (BAD)' : 'FAILED (GOOD)',
+                        error2: error2?.message || 'No error',
+                        result: error2 && error2.message.includes('duplicate') ? 
+                            'PASS - contract_id constraint working' : 
+                            'FAIL - contract_id constraint not working'
+                    }, error2 && error2.message.includes('duplicate') ? 'success' : 'error');
+
+                } else {
+                    displayResults('✅ Database Constraints', {
+                        constraints,
+                        result: 'Constraint information retrieved'
+                    }, 'success');
+                }
+
+            } catch (error) {
+                displayResults('❌ Test 4 Error', error, 'error');
+            }
+        }
+
+        // Run all tests
+        async function runAllTests() {
+            clearResults();
+            displayResults('🚀 Running All Contract ID Validation Tests', 'Starting comprehensive test suite...', 'info');
+            
+            await testContractIdValidation();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            await testMultipleCustomersSameId();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            await testDuplicateContractIds();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            await testDatabaseConstraints();
+            
+            displayResults('🎯 All Tests Complete', 'Contract ID validation testing completed!', 'success');
+        }
+    </script>
+</body>
+</html>
