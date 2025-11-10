@@ -10,6 +10,7 @@ const Reports: React.FC = () => {
   const [trafficData, setTrafficData] = useState<TrafficDataWithCustomer[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [generatingConsolidated, setGeneratingConsolidated] = useState(false);
   const [reportData, setReportData] = useState<ReportData | null>(null);
   
   const [filters, setFilters] = useState<ReportFilter>({
@@ -48,7 +49,7 @@ const Reports: React.FC = () => {
     }
   };
 
-  const generateReport = async () => {
+  const generateMonthWiseReport = async () => {
     setGenerating(true);
 
     try {
@@ -58,7 +59,7 @@ const Reports: React.FC = () => {
         endDate: filters.endDate,
         serviceType: filters.serviceType,
         officeName: filters.officeName,
-        paymentType: filters.paymentType, // Added payment type filter
+        paymentType: filters.paymentType,
         customerId: filters.customerId
       });
 
@@ -67,6 +68,16 @@ const Reports: React.FC = () => {
       }
 
       const trafficWithCustomers = trafficWithCustomersResponse.data;
+
+      // Group data by month for month-wise reporting
+      const monthlyData = new Map();
+      trafficWithCustomers.forEach(item => {
+        const monthKey = new Date(item.date).toISOString().slice(0, 7); // YYYY-MM format
+        if (!monthlyData.has(monthKey)) {
+          monthlyData.set(monthKey, []);
+        }
+        monthlyData.get(monthKey).push(item);
+      });
 
       // Extract unique customers from the traffic data
       const customerMap = new Map();
@@ -93,13 +104,103 @@ const Reports: React.FC = () => {
         }
       };
 
-      // Apply top customers limit if specified
+      // Apply top customers limit if specified and add month-wise breakdown
       const finalReport = applyTopCustomersLimit(report);
+      // Add monthly breakdown to the report
+      (finalReport as any).monthlyBreakdown = Array.from(monthlyData.entries()).map(([month, data]) => ({
+        month,
+        totalRevenue: data.reduce((sum: number, item: any) => sum + item.revenue, 0),
+        totalTraffic: data.reduce((sum: number, item: any) => sum + item.trafficVolume, 0),
+        customerCount: new Set(data.map((item: any) => item.customer.customerId)).size,
+        records: data.length
+      })).sort((a, b) => a.month.localeCompare(b.month));
+
       setReportData(finalReport);
     } catch (error) {
-      console.error('Error generating report:', error);
+      console.error('Error generating month-wise report:', error);
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const generateConsolidatedReport = async () => {
+    setGeneratingConsolidated(true);
+
+    try {
+      // Use the new comprehensive reporting method that joins customers and traffic data
+      const trafficWithCustomersResponse = await trafficService.getTrafficDataWithCustomers({
+        startDate: filters.startDate,
+        endDate: filters.endDate,
+        serviceType: filters.serviceType,
+        officeName: filters.officeName,
+        paymentType: filters.paymentType,
+        customerId: filters.customerId
+      });
+
+      if (!trafficWithCustomersResponse.success || !trafficWithCustomersResponse.data) {
+        throw new Error(trafficWithCustomersResponse.error || 'Failed to fetch report data');
+      }
+
+      const trafficWithCustomers = trafficWithCustomersResponse.data;
+
+      // Consolidate data by customer (sum all their records across the period)
+      const consolidatedData = new Map();
+      trafficWithCustomers.forEach(item => {
+        const customerId = item.customer.customerId;
+        if (!consolidatedData.has(customerId)) {
+          consolidatedData.set(customerId, {
+            customer: item.customer,
+            totalRevenue: 0,
+            totalTraffic: 0,
+            recordCount: 0,
+            firstDate: item.date,
+            lastDate: item.date
+          });
+        }
+        const existing = consolidatedData.get(customerId);
+        existing.totalRevenue += item.revenue;
+        existing.totalTraffic += item.trafficVolume;
+        existing.recordCount += 1;
+        if (new Date(item.date) < new Date(existing.firstDate)) {
+          existing.firstDate = item.date;
+        }
+        if (new Date(item.date) > new Date(existing.lastDate)) {
+          existing.lastDate = item.date;
+        }
+      });
+
+      // Convert consolidated data to array and sort by total revenue
+      const consolidatedArray = Array.from(consolidatedData.values())
+        .sort((a, b) => b.totalRevenue - a.totalRevenue);
+
+      // Extract unique customers
+      const uniqueCustomers = consolidatedArray.map(item => item.customer);
+
+      // Calculate summary statistics
+      const totalRevenue = consolidatedArray.reduce((sum, item) => sum + item.totalRevenue, 0);
+      const totalTraffic = consolidatedArray.reduce((sum, item) => sum + item.totalTraffic, 0);
+      const averageRevenuePerCustomer = uniqueCustomers.length > 0 ? totalRevenue / uniqueCustomers.length : 0;
+
+      const report: ReportData = {
+        customers: uniqueCustomers,
+        trafficData: trafficWithCustomers, // Keep original data for export
+        summary: {
+          totalCustomers: uniqueCustomers.length,
+          totalRevenue,
+          totalTraffic,
+          averageRevenuePerCustomer
+        }
+      };
+
+      // Add consolidated breakdown to the report
+      (report as any).consolidatedData = consolidatedArray.slice(0, parseInt(filters.topCustomersLimit || '10'));
+      (report as any).isConsolidated = true;
+
+      setReportData(report);
+    } catch (error) {
+      console.error('Error generating consolidated report:', error);
+    } finally {
+      setGeneratingConsolidated(false);
     }
   };
 
@@ -464,13 +565,25 @@ const Reports: React.FC = () => {
             </p>
           </div>
 
-          <div className="flex items-end">
+          <div className="flex flex-col gap-3">
             <button
-              onClick={generateReport}
-              disabled={generating}
+              onClick={generateMonthWiseReport}
+              disabled={generating || generatingConsolidated}
               className="btn-primary w-full"
             >
-              {generating ? 'Generating...' : 'Generate Report'}
+              {generating ? 'Generating...' : 'Generate Report Month-wise'}
+            </button>
+            <button
+              onClick={generateConsolidatedReport}
+              disabled={generating || generatingConsolidated}
+              className="btn-secondary w-full"
+              style={{
+                background: 'linear-gradient(135deg, #f9a8d4 0%, #ec4899 100%)',
+                color: 'white',
+                border: 'none'
+              }}
+            >
+              {generatingConsolidated ? 'Generating...' : 'Generate Consolidated Report'}
             </button>
           </div>
         </div>
@@ -522,12 +635,96 @@ const Reports: React.FC = () => {
             </div>
           </div>
 
+          {/* Month-wise or Consolidated Breakdown */}
+          {((reportData as any).monthlyBreakdown || (reportData as any).consolidatedData) && (
+            <div className="card">
+              <div className="card-header">
+                <h3 className="text-lg font-medium text-gray-900">
+                  {(reportData as any).isConsolidated ? 'Consolidated Customer Summary' : 'Monthly Breakdown'}
+                </h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  {(reportData as any).isConsolidated
+                    ? 'Total performance by customer across the selected period'
+                    : 'Revenue and traffic data grouped by month'}
+                </p>
+              </div>
+
+              <div className="overflow-x-auto max-h-96">
+                <table className="table">
+                  <thead className="table-header">
+                    <tr>
+                      {(reportData as any).isConsolidated ? (
+                        <>
+                          <th>Rank</th>
+                          <th>Customer</th>
+                          <th>Office</th>
+                          <th>Payment Type</th>
+                          <th>Total Revenue</th>
+                          <th>Total Traffic</th>
+                          <th>Records</th>
+                          <th>Period</th>
+                        </>
+                      ) : (
+                        <>
+                          <th>Month</th>
+                          <th>Revenue</th>
+                          <th>Traffic</th>
+                          <th>Customers</th>
+                          <th>Records</th>
+                        </>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(reportData as any).isConsolidated
+                      ? (reportData as any).consolidatedData?.map((item: any, index: number) => (
+                          <tr key={item.customer.customerId} className="table-row">
+                            <td className="font-medium" style={{ color: '#831843' }}>#{index + 1}</td>
+                            <td className="font-medium">{item.customer.customerName}</td>
+                            <td>{item.customer.officeName}</td>
+                            <td>
+                              <span className={`badge ${
+                                item.customer.paymentType === 'Advance' ? 'badge-advance' : 'badge-bnpl'
+                              }`}>
+                                {item.customer.paymentType || 'Advance'}
+                              </span>
+                            </td>
+                            <td className="font-semibold" style={{ color: '#be185d' }}>
+                              {formatCurrency(item.totalRevenue)}
+                            </td>
+                            <td>{formatNumber(item.totalTraffic)}</td>
+                            <td>{item.recordCount}</td>
+                            <td className="text-sm text-gray-600">
+                              {new Date(item.firstDate).toLocaleDateString()} - {new Date(item.lastDate).toLocaleDateString()}
+                            </td>
+                          </tr>
+                        ))
+                      : (reportData as any).monthlyBreakdown?.map((month: any) => (
+                          <tr key={month.month} className="table-row">
+                            <td className="font-medium" style={{ color: '#831843' }}>
+                              {new Date(month.month + '-01').toLocaleDateString('en-US', { year: 'numeric', month: 'long' })}
+                            </td>
+                            <td className="font-semibold" style={{ color: '#be185d' }}>
+                              {formatCurrency(month.totalRevenue)}
+                            </td>
+                            <td>{formatNumber(month.totalTraffic)}</td>
+                            <td>{month.customerCount}</td>
+                            <td>{month.records}</td>
+                          </tr>
+                        ))
+                    }
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           {/* Export Options */}
           <div className="card">
             <div className="card-header">
               <h3 className="text-lg font-medium text-gray-900">Export Report</h3>
             </div>
-            
+
             <div className="flex space-x-4">
               <button
                 onClick={() => exportReport('excel')}
