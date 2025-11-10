@@ -245,18 +245,18 @@ const Reports: React.FC = () => {
       let comprehensiveData;
 
       if (isConsolidated) {
-        // For consolidated reports: Show one row per customer with total revenue
+        // For consolidated reports: Matrix-style layout with aggregated totals (matching month-wise structure)
         const consolidatedData = (reportData as any).consolidatedData || [];
         comprehensiveData = consolidatedData.map((item: any, index: number) => ({
-          'Rank': index + 1,
+          'SL No': index + 1,
           'Customer Name': item.customer.customerName,
+          'Service Type': item.customer.serviceType,
           'Customer ID': item.customer.customerId,
           'Office Name': item.customer.officeName,
           'Contract ID': item.customer.contractId,
-          'Service Type': item.customer.serviceType,
           'Payment Type': item.customer.paymentType || 'Advance',
-          'Total Revenue': item.totalRevenue,
           'Total Traffic': item.totalTraffic,
+          'Total Revenue': item.totalRevenue,
           'Total Records': item.recordCount,
           'Period Start': new Date(item.firstDate).toLocaleDateString(),
           'Period End': new Date(item.lastDate).toLocaleDateString(),
