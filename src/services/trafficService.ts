@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { TrafficData, ApiResponse, Customer } from '../types';
+import { TrafficData, TrafficDataWithCustomer, ApiResponse } from '../types';
 
 const TRAFFIC_TABLE = 'traffic_data';
 
@@ -308,7 +308,7 @@ export const trafficService = {
     customerId?: string;
     contractId?: string; // Add contractId filter
     paymentType?: string; // Add paymentType filter
-  }): Promise<ApiResponse<Array<TrafficData & { customer: Customer }>>> {
+  }): Promise<ApiResponse<TrafficDataWithCustomer[]>> {
     try {
       let query = supabase
         .from(TRAFFIC_TABLE)

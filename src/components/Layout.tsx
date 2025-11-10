@@ -110,11 +110,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         <div className="sticky top-0 z-10 lg:hidden pl-1 pt-1 sm:pl-3 sm:pt-3" style={{ background: 'linear-gradient(135deg, #fdf2f8 0%, #fce7f3 100%)' }}>
           <button
             type="button"
-            className="-ml-0.5 -mt-0.5 h-12 w-12 inline-flex items-center justify-center rounded-md transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-inset"
+            className="-ml-0.5 -mt-0.5 h-12 w-12 inline-flex items-center justify-center rounded-md transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-pink-500"
             style={{
               color: '#be185d',
-              backgroundColor: 'rgba(236, 72, 153, 0.1)',
-              focusRingColor: '#ec4899'
+              backgroundColor: 'rgba(236, 72, 153, 0.1)'
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.backgroundColor = 'rgba(236, 72, 153, 0.2)';

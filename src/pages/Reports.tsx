@@ -3,11 +3,11 @@ import { Download, Calendar, Filter, BarChart3, PieChart, TrendingUp } from 'luc
 import { customerService } from '../services/customerService';
 import { trafficService } from '../services/trafficService';
 import { excelService } from '../services/excelService';
-import { Customer, TrafficData, ReportFilter, ReportData } from '../types';
+import { Customer, TrafficDataWithCustomer, ReportFilter, ReportData } from '../types';
 
 const Reports: React.FC = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [trafficData, setTrafficData] = useState<TrafficData[]>([]);
+  const [trafficData, setTrafficData] = useState<TrafficDataWithCustomer[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [reportData, setReportData] = useState<ReportData | null>(null);
@@ -31,13 +31,13 @@ const Reports: React.FC = () => {
       setLoading(true);
       const [customersResponse, trafficResponse] = await Promise.all([
         customerService.getAllCustomers(),
-        trafficService.getAllTrafficData()
+        trafficService.getTrafficDataWithCustomers()
       ]);
-      
+
       if (customersResponse.success && customersResponse.data) {
         setCustomers(customersResponse.data);
       }
-      
+
       if (trafficResponse.success && trafficResponse.data) {
         setTrafficData(trafficResponse.data);
       }

@@ -22,6 +22,11 @@ export interface TrafficData {
   createdAt: Date;
 }
 
+// Traffic data with joined customer information
+export interface TrafficDataWithCustomer extends TrafficData {
+  customer: Customer;
+}
+
 // Report types
 export interface ReportFilter {
   startDate?: Date;
@@ -36,7 +41,7 @@ export interface ReportFilter {
 
 export interface ReportData {
   customers: Customer[];
-  trafficData: TrafficData[];
+  trafficData: TrafficDataWithCustomer[];
   summary: {
     totalCustomers: number;
     totalRevenue: number;
