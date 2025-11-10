@@ -267,26 +267,62 @@ const Reports: React.FC = () => {
           'Record Type': 'CONSOLIDATED SUMMARY'
         }));
 
-        // Then, create detailed customer-wise records (individual transactions)
-        const detailedRecords = reportData.trafficData.map((item: any, index: number) => {
+        // Then, create consolidated customer-wise records (grouped by contract_id with summed totals)
+        const contractMap = new Map();
+
+        // Group by contract_id and sum traffic/revenue
+        reportData.trafficData.forEach((item: any) => {
           const customer = item.customer;
+          const contractId = item.contractId || customer?.contractId || 'Unknown';
+
+          if (!contractMap.has(contractId)) {
+            contractMap.set(contractId, {
+              customer: customer,
+              contractId: contractId,
+              totalTraffic: 0,
+              totalRevenue: 0,
+              recordCount: 0,
+              firstDate: item.date,
+              lastDate: item.date
+            });
+          }
+
+          const contractData = contractMap.get(contractId);
+          contractData.totalTraffic += item.trafficVolume;
+          contractData.totalRevenue += item.revenue;
+          contractData.recordCount += 1;
+
+          // Update date range
+          if (new Date(item.date) < new Date(contractData.firstDate)) {
+            contractData.firstDate = item.date;
+          }
+          if (new Date(item.date) > new Date(contractData.lastDate)) {
+            contractData.lastDate = item.date;
+          }
+        });
+
+        // Convert to array and create detailed records (one row per contract_id)
+        const detailedRecords = Array.from(contractMap.values()).map((contractData: any, index: number) => {
           return {
             'SL No': index + 1,
-            'Customer Name': customer?.customerName || 'Unknown',
-            'Service Type': item.serviceType,
-            'Customer ID': customer?.customerId || 'Unknown',
-            'Office Name': customer?.officeName || 'Unknown',
-            'Contract ID': item.contractId || customer?.contractId || 'Unknown',
-            'Payment Type': customer?.paymentType || 'Advance',
-            'Date': item.date.toLocaleDateString(),
-            'Traffic Volume': item.trafficVolume,
-            'Revenue': item.revenue,
-            'Revenue per Traffic': item.trafficVolume > 0 ? (item.revenue / item.trafficVolume).toFixed(2) : '0',
-            'Record Type': 'DETAILED RECORD'
+            'Customer Name': contractData.customer?.customerName || 'Unknown',
+            'Service Type': contractData.customer?.serviceType || 'Unknown',
+            'Customer ID': contractData.customer?.customerId || 'Unknown',
+            'Office Name': contractData.customer?.officeName || 'Unknown',
+            'Contract ID': contractData.contractId,
+            'Payment Type': contractData.customer?.paymentType || 'Advance',
+            'Total Traffic': contractData.totalTraffic,
+            'Total Revenue': contractData.totalRevenue,
+            'Total Records': contractData.recordCount,
+            'Period Start': new Date(contractData.firstDate).toLocaleDateString(),
+            'Period End': new Date(contractData.lastDate).toLocaleDateString(),
+            'Average Revenue per Record': contractData.recordCount > 0 ? (contractData.totalRevenue / contractData.recordCount).toFixed(2) : '0',
+            'Average Traffic per Record': contractData.recordCount > 0 ? (contractData.totalTraffic / contractData.recordCount).toFixed(2) : '0',
+            'Record Type': 'CUSTOMER SUMMARY BY CONTRACT'
           };
         });
 
-        // Combine both: consolidated summary first, then detailed records
+        // Combine both: consolidated summary first, then customer summaries by contract
         comprehensiveData = [...consolidatedSummary, ...detailedRecords];
       } else {
         // For month-wise reports: Show matrix format (customers as rows, months as columns)
