@@ -310,71 +310,81 @@ export const trafficService = {
     paymentType?: string; // Add paymentType filter
   }): Promise<ApiResponse<TrafficDataWithCustomer[]>> {
     try {
-      let query = supabase
+      // First get all traffic data
+      const { data: trafficData, error: trafficError } = await supabase
         .from(TRAFFIC_TABLE)
-        .select(`
-          *,
-          customers!inner(
-            id,
-            customer_name,
-            office_name,
-            service_type,
-            customer_id,
-            contract_id,
-            payment_type,
-            created_at,
-            updated_at
-          )
-        `)
+        .select('*')
         .order('date', { ascending: false });
 
-      // Apply filters
+      if (trafficError) throw trafficError;
+
+      // Then get all customers
+      const { data: customersData, error: customersError } = await supabase
+        .from('customers')
+        .select('*');
+
+      if (customersError) throw customersError;
+
+      // Create a map of customers by contract_id for efficient lookup
+      const customersByContractId = new Map();
+      customersData?.forEach(customer => {
+        customersByContractId.set(customer.contract_id, customer);
+      });
+
+      // Filter traffic data and join with customers
+      let filteredTrafficData = trafficData || [];
+
+      // Apply traffic data filters
       if (filters?.startDate) {
-        query = query.gte('date', filters.startDate.toISOString().split('T')[0]);
+        const startDateStr = filters.startDate.toISOString().split('T')[0];
+        filteredTrafficData = filteredTrafficData.filter(item => item.date >= startDateStr);
       }
       if (filters?.endDate) {
-        query = query.lte('date', filters.endDate.toISOString().split('T')[0]);
+        const endDateStr = filters.endDate.toISOString().split('T')[0];
+        filteredTrafficData = filteredTrafficData.filter(item => item.date <= endDateStr);
       }
       if (filters?.serviceType) {
-        query = query.eq('service_type', filters.serviceType);
+        filteredTrafficData = filteredTrafficData.filter(item => item.service_type === filters.serviceType);
       }
       if (filters?.contractId) {
-        query = query.eq('contract_id', filters.contractId); // Filter by contract_id directly
-      }
-      if (filters?.customerId) {
-        query = query.eq('customers.customer_id', filters.customerId); // Filter by customer_id via join
-      }
-      if (filters?.officeName) {
-        query = query.eq('customers.office_name', filters.officeName);
-      }
-      if (filters?.paymentType) {
-        query = query.eq('customers.payment_type', filters.paymentType); // Filter by payment_type via join
+        filteredTrafficData = filteredTrafficData.filter(item => item.contract_id === filters.contractId);
       }
 
-      const { data, error } = await query;
+      // Join traffic data with customers and apply customer-based filters
+      const trafficDataWithCustomers = filteredTrafficData
+        .map(trafficRow => {
+          const customer = customersByContractId.get(trafficRow.contract_id);
+          if (!customer) return null; // Skip if no matching customer found
 
-      if (error) throw error;
-
-      const trafficDataWithCustomers = data.map(row => ({
-        id: row.id,
-        contractId: row.contract_id, // Changed from customerId to contractId
-        date: new Date(row.date),
-        trafficVolume: row.traffic_volume,
-        revenue: row.revenue,
-        serviceType: row.service_type,
-        createdAt: new Date(row.created_at),
-        customer: {
-          id: row.customers.id,
-          customerName: row.customers.customer_name,
-          officeName: row.customers.office_name,
-          serviceType: row.customers.service_type,
-          customerId: row.customers.customer_id,
-          contractId: row.customers.contract_id,
-          paymentType: row.customers.payment_type || 'Advance', // Added payment type mapping
-          createdAt: new Date(row.customers.created_at),
-          updatedAt: new Date(row.customers.updated_at)
-        }
-      }));
+          return {
+            id: trafficRow.id,
+            contractId: trafficRow.contract_id,
+            date: new Date(trafficRow.date),
+            trafficVolume: trafficRow.traffic_volume,
+            revenue: trafficRow.revenue,
+            serviceType: trafficRow.service_type,
+            createdAt: new Date(trafficRow.created_at),
+            customer: {
+              id: customer.id,
+              customerName: customer.customer_name,
+              officeName: customer.office_name,
+              serviceType: customer.service_type,
+              customerId: customer.customer_id,
+              contractId: customer.contract_id,
+              paymentType: customer.payment_type || 'Advance',
+              createdAt: new Date(customer.created_at),
+              updatedAt: new Date(customer.updated_at)
+            }
+          };
+        })
+        .filter(item => item !== null) // Remove items without matching customers
+        .filter(item => {
+          // Apply customer-based filters
+          if (filters?.customerId && item!.customer.customerId !== filters.customerId) return false;
+          if (filters?.officeName && item!.customer.officeName !== filters.officeName) return false;
+          if (filters?.paymentType && item!.customer.paymentType !== filters.paymentType) return false;
+          return true;
+        }) as TrafficDataWithCustomer[];
 
       return { success: true, data: trafficDataWithCustomers };
     } catch (error) {
