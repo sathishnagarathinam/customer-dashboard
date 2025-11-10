@@ -248,32 +248,35 @@ const Reports: React.FC = () => {
         // For consolidated reports: Include both consolidated summary AND detailed customer-wise records
         const consolidatedData = (reportData as any).consolidatedData || [];
 
-        // First, create the consolidated summary (aggregated totals per customer)
-        const consolidatedSummary = consolidatedData.map((item: any, index: number) => ({
+        // Apply top customers limit to consolidated data
+        const limitedConsolidatedData = applyTopCustomersLimitToExport(consolidatedData);
+
+        // First, create the consolidated summary (aggregated totals per customer) - matching attachment format
+        const consolidatedSummary = limitedConsolidatedData.map((item: any, index: number) => ({
           'SL No': index + 1,
           'Customer Name': item.customer.customerName,
           'Service Type': item.customer.serviceType,
           'Customer ID': item.customer.customerId,
           'Office Name': item.customer.officeName,
           'Contract ID': item.customer.contractId,
-          'Payment Type': item.customer.paymentType || 'Advance',
-          'Total Traffic': item.totalTraffic,
           'Total Revenue': item.totalRevenue,
-          'Total Records': item.recordCount,
-          'Period Start': new Date(item.firstDate).toLocaleDateString(),
-          'Period End': new Date(item.lastDate).toLocaleDateString(),
-          'Average Revenue per Record': item.recordCount > 0 ? (item.totalRevenue / item.recordCount).toFixed(2) : '0',
-          'Average Traffic per Record': item.recordCount > 0 ? (item.totalTraffic / item.recordCount).toFixed(2) : '0',
-          'Record Type': 'CONSOLIDATED SUMMARY'
+          'Total Traffic': item.totalTraffic
         }));
 
         // Then, create consolidated customer-wise records (grouped by contract_id with summed totals)
         const contractMap = new Map();
 
-        // Group by contract_id and sum traffic/revenue
+        // Group by contract_id and sum traffic/revenue - but only for limited customers
+        const limitedCustomerIds = new Set(limitedConsolidatedData.map(item => item.customer.customerId));
+
         reportData.trafficData.forEach((item: any) => {
           const customer = item.customer;
           const contractId = item.contractId || customer?.contractId || 'Unknown';
+
+          // Only include data for customers within the limit
+          if (!limitedCustomerIds.has(customer?.customerId)) {
+            return;
+          }
 
           if (!contractMap.has(contractId)) {
             contractMap.set(contractId, {
@@ -301,7 +304,7 @@ const Reports: React.FC = () => {
           }
         });
 
-        // Convert to array and create detailed records (one row per contract_id)
+        // Convert to array and create detailed records (one row per contract_id) - matching attachment format
         const detailedRecords = Array.from(contractMap.values()).map((contractData: any, index: number) => {
           return {
             'SL No': index + 1,
@@ -310,15 +313,8 @@ const Reports: React.FC = () => {
             'Customer ID': contractData.customer?.customerId || 'Unknown',
             'Office Name': contractData.customer?.officeName || 'Unknown',
             'Contract ID': contractData.contractId,
-            'Payment Type': contractData.customer?.paymentType || 'Advance',
-            'Total Traffic': contractData.totalTraffic,
             'Total Revenue': contractData.totalRevenue,
-            'Total Records': contractData.recordCount,
-            'Period Start': new Date(contractData.firstDate).toLocaleDateString(),
-            'Period End': new Date(contractData.lastDate).toLocaleDateString(),
-            'Average Revenue per Record': contractData.recordCount > 0 ? (contractData.totalRevenue / contractData.recordCount).toFixed(2) : '0',
-            'Average Traffic per Record': contractData.recordCount > 0 ? (contractData.totalTraffic / contractData.recordCount).toFixed(2) : '0',
-            'Record Type': 'CUSTOMER SUMMARY BY CONTRACT'
+            'Total Traffic': contractData.totalTraffic
           };
         });
 
@@ -328,7 +324,10 @@ const Reports: React.FC = () => {
         // For month-wise reports: Show matrix format (customers as rows, months as columns)
         const monthlyMatrix = (reportData as any).monthlyMatrix;
         if (monthlyMatrix) {
-          comprehensiveData = monthlyMatrix.customers.map((customerData: any, index: number) => {
+          // Apply top customers limit to monthly matrix data
+          const limitedCustomers = applyTopCustomersLimitToMonthlyMatrix(monthlyMatrix.customers);
+
+          comprehensiveData = limitedCustomers.map((customerData: any, index: number) => {
             const exportRow: any = {
               'SL No': index + 1,
               'Customer Name': customerData.customer.customerName,
@@ -510,6 +509,43 @@ const Reports: React.FC = () => {
         averageRevenuePerCustomer
       }
     };
+  };
+
+  // Helper function to apply top customers limit to consolidated export data
+  const applyTopCustomersLimitToExport = (consolidatedData: any[]) => {
+    if (!filters.topCustomersLimit || filters.topCustomersLimit === 'All Customers') {
+      return consolidatedData;
+    }
+
+    const limitNumber = parseInt(filters.topCustomersLimit.replace('Top ', ''));
+    return consolidatedData.slice(0, limitNumber);
+  };
+
+  // Helper function to apply top customers limit to monthly matrix export data
+  const applyTopCustomersLimitToMonthlyMatrix = (customers: any[]) => {
+    if (!filters.topCustomersLimit || filters.topCustomersLimit === 'All Customers') {
+      return customers;
+    }
+
+    const limitNumber = parseInt(filters.topCustomersLimit.replace('Top ', ''));
+
+    // Sort customers by total revenue (highest first) and take the top N
+    const sortedCustomers = customers.sort((a, b) => {
+      let totalRevenueA = 0;
+      let totalRevenueB = 0;
+
+      a.months.forEach((monthData: any) => {
+        totalRevenueA += monthData.revenue;
+      });
+
+      b.months.forEach((monthData: any) => {
+        totalRevenueB += monthData.revenue;
+      });
+
+      return totalRevenueB - totalRevenueA; // Descending order
+    });
+
+    return sortedCustomers.slice(0, limitNumber);
   };
 
   const formatCurrency = (amount: number) => {
