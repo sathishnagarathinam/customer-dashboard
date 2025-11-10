@@ -185,12 +185,13 @@ const Upload: React.FC = () => {
         'Office Name': 'Main Office',
         'Service Type': 'Premium',
         'Customer ID': 'CUST001',
-        'Contract ID': 'CONT001'
+        'Contract ID': 'CONT001',
+        'Payment Type': 'Advance' // Added payment type to template
       }];
       excelService.exportToExcel(template, 'customer-template', 'Template');
     } else {
       const template = [{
-        'Customer ID': 'CUST001',
+        'Contract ID': 'CONT001', // Changed from 'Customer ID' to 'Contract ID'
         'Date': '2024-01-01',
         'Traffic': 1000,
         'Revenue': 5000.00,
@@ -305,10 +306,11 @@ const Upload: React.FC = () => {
                   <li>• <strong>Service Type</strong> (required)</li>
                   <li>• <strong>Customer ID</strong> (required, unique)</li>
                   <li>• <strong>Contract ID</strong> (required)</li>
+                  <li>• <strong>Payment Type</strong> (optional, "Advance" or "BNPL", defaults to "Advance")</li>
                 </ul>
               ) : (
                 <ul className="text-sm text-gray-600 space-y-1">
-                  <li>• <strong>Customer ID</strong> (required, must exist in customers)</li>
+                  <li>• <strong>Contract ID</strong> (required, must exist in customers)</li>
                   <li>• <strong>Date</strong> (required, format: YYYY-MM-DD)</li>
                   <li>• <strong>Traffic</strong> (required, number)</li>
                   <li>• <strong>Revenue</strong> (required, number)</li>

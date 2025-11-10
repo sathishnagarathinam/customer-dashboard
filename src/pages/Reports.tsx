@@ -17,6 +17,7 @@ const Reports: React.FC = () => {
     endDate: new Date(), // Today
     officeName: '',
     serviceType: '',
+    paymentType: '', // Added payment type filter
     customerId: '',
     topCustomersLimit: 'All Customers'
   });
@@ -57,6 +58,7 @@ const Reports: React.FC = () => {
         endDate: filters.endDate,
         serviceType: filters.serviceType,
         officeName: filters.officeName,
+        paymentType: filters.paymentType, // Added payment type filter
         customerId: filters.customerId
       });
 
@@ -118,27 +120,30 @@ const Reports: React.FC = () => {
       // Calculate customer total revenues for proper sorting
       const customerTotalRevenues = new Map<string, number>();
       reportData.trafficData.forEach(item => {
-        const currentTotal = customerTotalRevenues.get(item.customerId) || 0;
-        customerTotalRevenues.set(item.customerId, currentTotal + item.revenue);
+        const customerId = item.customer.customerId; // Get customerId from joined customer data
+        const currentTotal = customerTotalRevenues.get(customerId) || 0;
+        customerTotalRevenues.set(customerId, currentTotal + item.revenue);
       });
 
       // Comprehensive traffic data with full customer information, sorted by customer total revenue (highest first)
       const comprehensiveData = reportData.trafficData
         .map(item => {
           // For the new joined data structure, customer info is already available
-          const customer = (item as any).customer || reportData.customers.find(c => c.customerId === item.customerId);
+          const customer = (item as any).customer;
+          const customerId = customer?.customerId || 'Unknown';
           return {
             'Date': `${item.date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`, // Month and Year format
             'Customer Name': customer?.customerName || 'Unknown',
-            'Customer ID': item.customerId,
+            'Customer ID': customerId,
             'Office Name': customer?.officeName || 'Unknown',
-            'Contract ID': customer?.contractId || 'Unknown',
+            'Contract ID': item.contractId || customer?.contractId || 'Unknown', // Use contractId from traffic data
             'Service Type': item.serviceType,
+            'Payment Type': customer?.paymentType || 'Advance', // Added payment type to export
             'Traffic Volume': item.trafficVolume,
             'Revenue': item.revenue,
             'Revenue per Traffic': item.trafficVolume > 0 ? (item.revenue / item.trafficVolume).toFixed(2) : '0',
             // Add customer total revenue for sorting
-            _customerTotalRevenue: customerTotalRevenues.get(item.customerId) || 0,
+            _customerTotalRevenue: customerTotalRevenues.get(customerId) || 0,
             _individualRevenue: item.revenue
           };
         })
@@ -166,12 +171,21 @@ const Reports: React.FC = () => {
     return [...new Set(array.map(item => item[key]))].filter(Boolean);
   };
 
-  // Get filtered customers based on selected office
+  // Get filtered customers based on selected office and payment type
   const getFilteredCustomers = () => {
-    if (!filters.officeName) {
-      return customers; // Show all customers if no office selected
+    let filteredCustomers = customers;
+
+    // Filter by office name if selected
+    if (filters.officeName) {
+      filteredCustomers = filteredCustomers.filter(customer => customer.officeName === filters.officeName);
     }
-    return customers.filter(customer => customer.officeName === filters.officeName);
+
+    // Filter by payment type if selected
+    if (filters.paymentType) {
+      filteredCustomers = filteredCustomers.filter(customer => customer.paymentType === filters.paymentType);
+    }
+
+    return filteredCustomers;
   };
 
   // Get unique office names
@@ -179,17 +193,27 @@ const Reports: React.FC = () => {
     return getUniqueValues(customers, 'officeName').sort();
   };
 
-  // Get unique service types filtered by selected office
+  // Get unique service types filtered by selected office and payment type
   const getFilteredServiceTypes = () => {
     let filteredCustomers = customers;
     let filteredTrafficData = trafficData;
 
     // Filter by selected office if one is chosen
     if (filters.officeName) {
-      filteredCustomers = customers.filter(customer => customer.officeName === filters.officeName);
-      // Also filter traffic data to match the office-filtered customers
-      const officeCustomerIds = filteredCustomers.map(c => c.customerId);
-      filteredTrafficData = trafficData.filter(traffic => officeCustomerIds.includes(traffic.customerId));
+      filteredCustomers = filteredCustomers.filter(customer => customer.officeName === filters.officeName);
+    }
+
+    // Filter by selected payment type if one is chosen
+    if (filters.paymentType) {
+      filteredCustomers = filteredCustomers.filter(customer => customer.paymentType === filters.paymentType);
+    }
+
+    // Filter traffic data to match the filtered customers
+    if (filters.officeName || filters.paymentType) {
+      const filteredCustomerIds = filteredCustomers.map(c => c.customerId);
+      filteredTrafficData = trafficData.filter(traffic =>
+        filteredCustomerIds.includes(traffic.customer?.customerId || '') // Use customer.customerId from joined data
+      );
     }
 
     const customerServiceTypes = getUniqueValues(filteredCustomers, 'serviceType');
@@ -207,6 +231,16 @@ const Reports: React.FC = () => {
     });
   };
 
+  // Handle payment type change and reset dependent filters
+  const handlePaymentTypeChange = (paymentType: string) => {
+    setFilters({
+      ...filters,
+      paymentType,
+      serviceType: '', // Reset service type selection when payment type changes
+      customerId: '' // Reset customer selection when payment type changes
+    });
+  };
+
   // Apply top customers limit to report data based on total revenue ranking
   const applyTopCustomersLimit = (data: ReportData): ReportData => {
     if (!filters.topCustomersLimit || filters.topCustomersLimit === 'All Customers') {
@@ -216,11 +250,13 @@ const Reports: React.FC = () => {
     const limitNumber = parseInt(filters.topCustomersLimit.replace('Top ', ''));
 
     // Calculate total revenue per customer by summing all their revenue values
+    // Note: Traffic data now uses contractId, but we group by customer.customerId for customer-level reporting
     const customerRevenues = new Map<string, number>();
     data.trafficData.forEach(item => {
-      const currentTotal = customerRevenues.get(item.customerId) || 0;
+      const customerId = item.customer.customerId; // Get customerId from the joined customer data
+      const currentTotal = customerRevenues.get(customerId) || 0;
       // Sum up all revenue amounts for each customer (pure total revenue, no derived metrics)
-      customerRevenues.set(item.customerId, currentTotal + item.revenue);
+      customerRevenues.set(customerId, currentTotal + item.revenue);
     });
 
     // Sort customers by total revenue in descending order (highest revenue first)
@@ -250,7 +286,7 @@ const Reports: React.FC = () => {
 
     // Filter traffic data for top customers only
     const filteredTrafficData = data.trafficData.filter(item =>
-      topCustomerIds.includes(item.customerId)
+      topCustomerIds.includes(item.customer.customerId) // Use customer.customerId from joined data
     );
 
     // Recalculate summary statistics for the top customers
@@ -342,6 +378,25 @@ const Reports: React.FC = () => {
             </select>
           </div>
 
+          {/* Payment Type Dropdown Filter */}
+          <div>
+            <label className="form-label">Payment Type</label>
+            <select
+              className="form-input"
+              value={filters.paymentType || ''}
+              onChange={(e) => handlePaymentTypeChange(e.target.value)}
+            >
+              <option value="">All Payment Types</option>
+              <option value="Advance">Advance</option>
+              <option value="BNPL">BNPL</option>
+            </select>
+            {filters.officeName && (
+              <p className="text-xs text-gray-500 mt-1">
+                Showing payment types for {filters.officeName}
+              </p>
+            )}
+          </div>
+
           {/* Service Type Dropdown Filter */}
           <div>
             <label className="form-label">Service Type</label>
@@ -355,9 +410,12 @@ const Reports: React.FC = () => {
                 <option key={type} value={type}>{type}</option>
               ))}
             </select>
-            {filters.officeName && (
+            {(filters.officeName || filters.paymentType) && (
               <p className="text-xs text-gray-500 mt-1">
-                Showing service types for {filters.officeName}
+                Showing service types for {[
+                  filters.officeName && `office: ${filters.officeName}`,
+                  filters.paymentType && `payment type: ${filters.paymentType}`
+                ].filter(Boolean).join(', ')}
               </p>
             )}
           </div>
@@ -377,9 +435,12 @@ const Reports: React.FC = () => {
                 </option>
               ))}
             </select>
-            {filters.officeName && (
+            {(filters.officeName || filters.paymentType) && (
               <p className="text-xs text-gray-500 mt-1">
-                Showing customers from {filters.officeName}
+                Showing customers filtered by {[
+                  filters.officeName && `office: ${filters.officeName}`,
+                  filters.paymentType && `payment type: ${filters.paymentType}`
+                ].filter(Boolean).join(', ')}
               </p>
             )}
           </div>
@@ -514,8 +575,9 @@ const Reports: React.FC = () => {
                       // Calculate total revenue per customer for ranking display
                       const customerTotalRevenues = new Map<string, number>();
                       reportData.trafficData.forEach(item => {
-                        const currentTotal = customerTotalRevenues.get(item.customerId) || 0;
-                        customerTotalRevenues.set(item.customerId, currentTotal + item.revenue);
+                        const customerId = item.customer?.customerId || '';
+                        const currentTotal = customerTotalRevenues.get(customerId) || 0;
+                        customerTotalRevenues.set(customerId, currentTotal + item.revenue);
                       });
 
                       // Create customer ranking with total revenue
@@ -569,15 +631,18 @@ const Reports: React.FC = () => {
                       // Calculate customer total revenues for sorting
                       const customerTotalRevenues = new Map<string, number>();
                       reportData.trafficData.forEach(item => {
-                        const currentTotal = customerTotalRevenues.get(item.customerId) || 0;
-                        customerTotalRevenues.set(item.customerId, currentTotal + item.revenue);
+                        const customerId = item.customer?.customerId || '';
+                        const currentTotal = customerTotalRevenues.get(customerId) || 0;
+                        customerTotalRevenues.set(customerId, currentTotal + item.revenue);
                       });
 
                       // Sort traffic data by customer's total revenue (not individual record revenue)
                       return reportData.trafficData
                         .sort((a, b) => {
-                          const totalRevenueA = customerTotalRevenues.get(a.customerId) || 0;
-                          const totalRevenueB = customerTotalRevenues.get(b.customerId) || 0;
+                          const customerIdA = a.customer?.customerId || '';
+                          const customerIdB = b.customer?.customerId || '';
+                          const totalRevenueA = customerTotalRevenues.get(customerIdA) || 0;
+                          const totalRevenueB = customerTotalRevenues.get(customerIdB) || 0;
                           // Primary sort: by customer total revenue (descending)
                           if (totalRevenueA !== totalRevenueB) {
                             return totalRevenueB - totalRevenueA;
@@ -587,12 +652,12 @@ const Reports: React.FC = () => {
                         })
                         .slice(0, 10)
                         .map((item) => {
-                          // Handle both old and new data structures
-                          const customer = (item as any).customer || reportData.customers.find(c => c.customerId === item.customerId);
+                          // Handle the new joined data structure
+                          const customer = (item as any).customer;
                           return (
                             <tr key={item.id}>
                               <td>{item.date.toLocaleDateString()}</td>
-                              <td className="font-medium">{customer?.customerName || item.customerId}</td>
+                              <td className="font-medium">{customer?.customerName || customer?.customerId || 'Unknown'}</td>
                               <td>{customer?.officeName || 'Unknown'}</td>
                               <td>
                                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">

@@ -10,7 +10,7 @@ export const trafficService = {
       const { data, error } = await supabase
         .from(TRAFFIC_TABLE)
         .insert([{
-          customer_id: trafficData.customerId,
+          contract_id: trafficData.contractId, // Changed from customer_id to contract_id
           date: trafficData.date.toISOString().split('T')[0], // Store as date string
           traffic_volume: trafficData.trafficVolume,
           revenue: trafficData.revenue,
@@ -24,7 +24,7 @@ export const trafficService = {
 
       const newTrafficData: TrafficData = {
         id: data.id,
-        customerId: data.customer_id,
+        contractId: data.contract_id, // Changed from customerId to contractId
         date: new Date(data.date),
         trafficVolume: data.traffic_volume,
         revenue: data.revenue,
@@ -51,7 +51,7 @@ export const trafficService = {
 
       const trafficData: TrafficData[] = data.map(row => ({
         id: row.id,
-        customerId: row.customer_id,
+        contractId: row.contract_id, // Changed from customerId to contractId
         date: new Date(row.date),
         trafficVolume: row.traffic_volume,
         revenue: row.revenue,
@@ -66,20 +66,52 @@ export const trafficService = {
     }
   },
 
-  // Get traffic data by customer ID
-  async getTrafficDataByCustomerId(customerId: string): Promise<ApiResponse<TrafficData[]>> {
+  // Get traffic data by contract ID
+  async getTrafficDataByContractId(contractId: string): Promise<ApiResponse<TrafficData[]>> {
     try {
       const { data, error } = await supabase
         .from(TRAFFIC_TABLE)
         .select('*')
-        .eq('customer_id', customerId)
+        .eq('contract_id', contractId) // Changed from customer_id to contract_id
         .order('date', { ascending: false });
 
       if (error) throw error;
 
       const trafficData: TrafficData[] = data.map(row => ({
         id: row.id,
-        customerId: row.customer_id,
+        contractId: row.contract_id, // Changed from customerId to contractId
+        date: new Date(row.date),
+        trafficVolume: row.traffic_volume,
+        revenue: row.revenue,
+        serviceType: row.service_type,
+        createdAt: new Date(row.created_at)
+      }));
+
+      return { success: true, data: trafficData };
+    } catch (error) {
+      console.error('Error fetching traffic data by contract ID:', error);
+      return { success: false, error: 'Failed to fetch traffic data' };
+    }
+  },
+
+  // Get traffic data by customer ID (across all their contracts)
+  async getTrafficDataByCustomerId(customerId: string): Promise<ApiResponse<TrafficData[]>> {
+    try {
+      // Join with customers table to get all contracts for this customer
+      const { data, error } = await supabase
+        .from(TRAFFIC_TABLE)
+        .select(`
+          *,
+          customers!inner(customer_id)
+        `)
+        .eq('customers.customer_id', customerId)
+        .order('date', { ascending: false });
+
+      if (error) throw error;
+
+      const trafficData: TrafficData[] = data.map(row => ({
+        id: row.id,
+        contractId: row.contract_id,
         date: new Date(row.date),
         trafficVolume: row.traffic_volume,
         revenue: row.revenue,
@@ -108,7 +140,7 @@ export const trafficService = {
 
       const trafficData: TrafficData[] = data.map(row => ({
         id: row.id,
-        customerId: row.customer_id,
+        contractId: row.contract_id, // Changed from customerId to contractId
         date: new Date(row.date),
         trafficVolume: row.traffic_volume,
         revenue: row.revenue,
@@ -128,7 +160,7 @@ export const trafficService = {
     try {
       const updateData: any = {};
 
-      if (updates.customerId) updateData.customer_id = updates.customerId;
+      if (updates.contractId) updateData.contract_id = updates.contractId; // Changed from customerId to contractId
       if (updates.date) updateData.date = updates.date.toISOString().split('T')[0];
       if (updates.trafficVolume !== undefined) updateData.traffic_volume = updates.trafficVolume;
       if (updates.revenue !== undefined) updateData.revenue = updates.revenue;
@@ -221,7 +253,7 @@ export const trafficService = {
           }
 
           const record = {
-            customer_id: data.customerId,
+            contract_id: data.contractId, // Changed from customer_id to contract_id
             date: dateString,
             traffic_volume: Number(data.trafficVolume) || 0,
             revenue: Number(data.revenue) || 0,
@@ -274,6 +306,8 @@ export const trafficService = {
     serviceType?: string;
     officeName?: string;
     customerId?: string;
+    contractId?: string; // Add contractId filter
+    paymentType?: string; // Add paymentType filter
   }): Promise<ApiResponse<Array<TrafficData & { customer: Customer }>>> {
     try {
       let query = supabase
@@ -287,6 +321,7 @@ export const trafficService = {
             service_type,
             customer_id,
             contract_id,
+            payment_type,
             created_at,
             updated_at
           )
@@ -303,11 +338,17 @@ export const trafficService = {
       if (filters?.serviceType) {
         query = query.eq('service_type', filters.serviceType);
       }
+      if (filters?.contractId) {
+        query = query.eq('contract_id', filters.contractId); // Filter by contract_id directly
+      }
       if (filters?.customerId) {
-        query = query.eq('customer_id', filters.customerId);
+        query = query.eq('customers.customer_id', filters.customerId); // Filter by customer_id via join
       }
       if (filters?.officeName) {
         query = query.eq('customers.office_name', filters.officeName);
+      }
+      if (filters?.paymentType) {
+        query = query.eq('customers.payment_type', filters.paymentType); // Filter by payment_type via join
       }
 
       const { data, error } = await query;
@@ -316,7 +357,7 @@ export const trafficService = {
 
       const trafficDataWithCustomers = data.map(row => ({
         id: row.id,
-        customerId: row.customer_id,
+        contractId: row.contract_id, // Changed from customerId to contractId
         date: new Date(row.date),
         trafficVolume: row.traffic_volume,
         revenue: row.revenue,
@@ -329,6 +370,7 @@ export const trafficService = {
           serviceType: row.customers.service_type,
           customerId: row.customers.customer_id,
           contractId: row.customers.contract_id,
+          paymentType: row.customers.payment_type || 'Advance', // Added payment type mapping
           createdAt: new Date(row.customers.created_at),
           updatedAt: new Date(row.customers.updated_at)
         }

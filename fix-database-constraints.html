@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fix Database Constraints</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        .warning { background-color: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+        button.danger { background-color: #dc3545; }
+        button.danger:hover { background-color: #c82333; }
+        pre {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .sql-box {
+            background-color: #2d3748;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Fix Database Constraints</h1>
+        <p>This tool helps diagnose and fix the database constraint issue causing the upload error.</p>
+        
+        <div id="status" class="status info">
+            Ready to check database constraints...
+        </div>
+
+        <div style="margin: 20px 0;">
+            <button onclick="checkConstraints()">1. Check Current Constraints</button>
+            <button onclick="showMigrationSQL()">2. Show Migration SQL</button>
+            <button onclick="testConstraintBehavior()">3. Test Constraint Behavior</button>
+            <button onclick="runFullDiagnostic()">🚀 Run Full Diagnostic</button>
+        </div>
+
+        <div id="results"></div>
+    </div>
+
+    <script>
+        // Initialize Supabase client
+        const supabaseUrl = 'https://dsnfnjhuixkpllnyixmi.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRzbmZuamh1aXhrcGxsbnlpeG1pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI1NzkzOTMsImV4cCI6MjA3ODE1NTM5M30.JrFtG4tSyUWZ4JlbT2ZY1E6Wj5Z9r15_evzCaU14cHo';
+        
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+        function updateStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+        }
+
+        function displayResults(title, data, type = 'info') {
+            const resultsDiv = document.getElementById('results');
+            const sectionClass = type === 'error' ? 'error' : type === 'success' ? 'success' : type === 'warning' ? 'warning' : 'info';
+            
+            resultsDiv.innerHTML += `
+                <div class="section ${sectionClass}">
+                    <h3>${title}</h3>
+                    <pre>${typeof data === 'string' ? data : JSON.stringify(data, null, 2)}</pre>
+                </div>
+            `;
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+
+        async function checkConstraints() {
+            updateStatus('Checking database constraints...', 'info');
+            clearResults();
+            
+            try {
+                // Try to get constraint information using SQL query
+                const { data, error } = await supabase
+                    .rpc('sql', {
+                        query: `
+                            SELECT 
+                                conname as constraint_name,
+                                contype as constraint_type,
+                                pg_get_constraintdef(oid) as constraint_definition
+                            FROM pg_constraint 
+                            WHERE conrelid = 'customers'::regclass
+                            AND contype = 'u'
+                            ORDER BY conname;
+                        `
+                    });
+
+                if (error) {
+                    // Fallback: Try to detect constraints by attempting inserts
+                    displayResults('⚠️ Cannot Query Constraints Directly', 
+                        'Unable to query constraints directly. Will test constraint behavior instead.', 'warning');
+                    await testConstraintBehavior();
+                    return;
+                }
+
+                displayResults('✅ Current Database Constraints', data, 'success');
+                
+                // Analyze constraints
+                const hasCustomerIdConstraint = data.some(c => c.constraint_name.includes('customer_id'));
+                const hasContractIdConstraint = data.some(c => c.constraint_name.includes('contract_id'));
+                
+                let analysis = '🔍 Constraint Analysis:\n';
+                analysis += `• customer_id unique constraint: ${hasCustomerIdConstraint ? '✅ EXISTS (PROBLEM!)' : '❌ Not found'}\n`;
+                analysis += `• contract_id unique constraint: ${hasContractIdConstraint ? '✅ EXISTS (GOOD!)' : '❌ Missing (PROBLEM!)'}\n\n`;
+                
+                if (hasCustomerIdConstraint && !hasContractIdConstraint) {
+                    analysis += '🚨 ISSUE IDENTIFIED: Database still has old customer_id constraint!\n';
+                    analysis += '📋 SOLUTION: Run the migration SQL to fix constraints.';
+                } else if (!hasCustomerIdConstraint && hasContractIdConstraint) {
+                    analysis += '✅ CONSTRAINTS CORRECT: Database has been migrated properly.';
+                } else if (hasCustomerIdConstraint && hasContractIdConstraint) {
+                    analysis += '⚠️ BOTH CONSTRAINTS EXIST: Need to remove customer_id constraint.';
+                } else {
+                    analysis += '❌ NO UNIQUE CONSTRAINTS: Database setup incomplete.';
+                }
+                
+                displayResults('📊 Analysis Results', analysis, 
+                    hasCustomerIdConstraint && !hasContractIdConstraint ? 'error' : 'info');
+                
+                updateStatus('✅ Constraint check complete', 'success');
+                
+            } catch (error) {
+                updateStatus(`❌ Constraint check failed: ${error.message}`, 'error');
+                displayResults('Database Constraint Check Error', error, 'error');
+            }
+        }
+
+        function showMigrationSQL() {
+            displayResults('🔧 Database Migration SQL', `
+-- Step 1: Remove the existing unique constraint on customer_id
+ALTER TABLE customers DROP CONSTRAINT IF EXISTS customers_customer_id_key;
+
+-- Step 2: Add unique constraint on contract_id  
+ALTER TABLE customers ADD CONSTRAINT customers_contract_id_key UNIQUE (contract_id);
+
+-- Step 3: Update indexes
+DROP INDEX IF EXISTS idx_customers_customer_id;
+CREATE INDEX IF NOT EXISTS idx_customers_customer_id ON customers(customer_id);
+CREATE INDEX IF NOT EXISTS idx_customers_contract_id ON customers(contract_id);
+
+-- Step 4: Verify the changes
+SELECT 
+    conname as constraint_name,
+    contype as constraint_type,
+    pg_get_constraintdef(oid) as constraint_definition
+FROM pg_constraint 
+WHERE conrelid = 'customers'::regclass
+AND contype = 'u';
+            `, 'info');
+            
+            displayResults('📋 Instructions', `
+1. Copy the SQL above
+2. Go to your Supabase Dashboard
+3. Navigate to SQL Editor
+4. Paste and run the migration SQL
+5. Come back here and run "Test Constraint Behavior" to verify
+            `, 'warning');
+        }
+
+        async function testConstraintBehavior() {
+            updateStatus('Testing constraint behavior...', 'info');
+            
+            try {
+                const testCustomerId = `TEST_${Date.now()}`;
+                const testContractId1 = `CONT_${Date.now()}_1`;
+                const testContractId2 = `CONT_${Date.now()}_2`;
+                
+                // Test 1: Insert first record
+                const { data: insert1, error: error1 } = await supabase
+                    .from('customers')
+                    .insert([{
+                        customer_name: 'Test Customer 1',
+                        office_name: 'Test Office',
+                        service_type: 'Test',
+                        customer_id: testCustomerId,
+                        contract_id: testContractId1
+                    }])
+                    .select();
+
+                if (error1) {
+                    displayResults('❌ Test 1 Failed', `Could not insert first test record: ${error1.message}`, 'error');
+                    return;
+                }
+
+                // Test 2: Try to insert same customer_id with different contract_id
+                const { data: insert2, error: error2 } = await supabase
+                    .from('customers')
+                    .insert([{
+                        customer_name: 'Test Customer 2',
+                        office_name: 'Test Office',
+                        service_type: 'Test',
+                        customer_id: testCustomerId, // Same customer_id
+                        contract_id: testContractId2  // Different contract_id
+                    }])
+                    .select();
+
+                // Test 3: Try to insert duplicate contract_id
+                const { data: insert3, error: error3 } = await supabase
+                    .from('customers')
+                    .insert([{
+                        customer_name: 'Test Customer 3',
+                        office_name: 'Test Office',
+                        service_type: 'Test',
+                        customer_id: 'DIFFERENT_CUSTOMER',
+                        contract_id: testContractId1 // Duplicate contract_id
+                    }])
+                    .select();
+
+                // Clean up test data
+                if (insert1) {
+                    await supabase.from('customers').delete().eq('contract_id', testContractId1);
+                }
+                if (insert2) {
+                    await supabase.from('customers').delete().eq('contract_id', testContractId2);
+                }
+
+                // Analyze results
+                let analysis = '🧪 Constraint Behavior Test Results:\n\n';
+                analysis += `Test 1 - Insert first record: ${insert1 ? '✅ SUCCESS' : '❌ FAILED'}\n`;
+                analysis += `Test 2 - Same customer_id, different contract_id: ${insert2 ? '✅ SUCCESS (GOOD!)' : '❌ FAILED (PROBLEM!)'}\n`;
+                analysis += `Test 3 - Different customer_id, same contract_id: ${insert3 ? '❌ SUCCESS (PROBLEM!)' : '✅ FAILED (GOOD!)'}\n\n`;
+                
+                if (error2 && error2.message.includes('customer_id')) {
+                    analysis += '🚨 PROBLEM CONFIRMED: customer_id constraint still exists!\n';
+                    analysis += '📋 SOLUTION: Run the migration SQL to remove customer_id constraint.';
+                } else if (insert2 && error3 && error3.message.includes('contract_id')) {
+                    analysis += '✅ CONSTRAINTS WORKING CORRECTLY: contract_id is unique, customer_id allows duplicates.';
+                } else {
+                    analysis += '⚠️ UNEXPECTED BEHAVIOR: Please check constraint configuration.';
+                }
+                
+                displayResults('🔍 Behavior Analysis', analysis, 
+                    (error2 && error2.message.includes('customer_id')) ? 'error' : 'success');
+                
+                if (error2) {
+                    displayResults('Error Details - Test 2', error2.message, 'error');
+                }
+                if (error3) {
+                    displayResults('Error Details - Test 3', error3.message, 'info');
+                }
+                
+                updateStatus('✅ Constraint behavior test complete', 'success');
+                
+            } catch (error) {
+                updateStatus(`❌ Constraint test failed: ${error.message}`, 'error');
+                displayResults('Constraint Test Error', error, 'error');
+            }
+        }
+
+        async function runFullDiagnostic() {
+            clearResults();
+            updateStatus('Running full diagnostic...', 'info');
+            
+            displayResults('🚀 Starting Full Database Constraint Diagnostic', 'Checking all aspects of the constraint configuration...', 'info');
+            
+            await checkConstraints();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            await testConstraintBehavior();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            showMigrationSQL();
+            
+            updateStatus('🎯 Full diagnostic complete - check results above', 'info');
+        }
+    </script>
+</body>
+</html>

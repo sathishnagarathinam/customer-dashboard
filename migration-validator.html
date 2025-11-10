@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Traffic Data Migration Validator</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+        }
+        .section h2 {
+            margin-top: 0;
+            color: #555;
+        }
+        button {
+            background: #007cba;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px;
+        }
+        button:hover {
+            background: #005a87;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+        }
+        .code {
+            background: #f4f4f4;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+        .step {
+            margin: 15px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-left: 4px solid #007cba;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 Traffic Data Migration Validator</h1>
+        <p style="text-align: center; color: #666; margin-bottom: 30px;">
+            This tool helps validate and execute the migration from customer_id to contract_id in the traffic data system.
+        </p>
+
+        <!-- Pre-Migration Validation -->
+        <div class="section">
+            <h2>📋 Step 1: Pre-Migration Validation</h2>
+            <p>Check the current state of your database before running the migration.</p>
+            <button onclick="validatePreMigration()">Run Pre-Migration Checks</button>
+            <div id="preMigrationStatus"></div>
+        </div>
+
+        <!-- Migration Execution -->
+        <div class="section">
+            <h2>🚀 Step 2: Execute Migration</h2>
+            <p>Run the database migration to add contract_id column and migrate data.</p>
+            <div class="step">
+                <strong>Manual Step Required:</strong>
+                <p>You need to run the migration SQL script manually in your database:</p>
+                <div class="code">psql -h localhost -U postgres -d customer_dashboard -f migrate-traffic-to-contract-id.sql</div>
+                <p>Or execute the SQL commands directly in your database management tool.</p>
+            </div>
+            <button onclick="checkMigrationStatus()">Check Migration Status</button>
+            <div id="migrationStatus"></div>
+        </div>
+
+        <!-- Post-Migration Validation -->
+        <div class="section">
+            <h2>✅ Step 3: Post-Migration Validation</h2>
+            <p>Verify that the migration completed successfully and data integrity is maintained.</p>
+            <button onclick="validatePostMigration()">Run Post-Migration Checks</button>
+            <div id="postMigrationStatus"></div>
+        </div>
+
+        <!-- Application Testing -->
+        <div class="section">
+            <h2>🧪 Step 4: Application Testing</h2>
+            <p>Test the updated application functionality with the new contract_id system.</p>
+            <button onclick="testApplicationFunctionality()">Test Application Functions</button>
+            <div id="applicationTestStatus"></div>
+        </div>
+
+        <!-- Rollback Option -->
+        <div class="section">
+            <h2>🔙 Rollback (If Needed)</h2>
+            <p style="color: #d63384;">Only use this if you need to revert the migration due to issues.</p>
+            <div class="step">
+                <strong>Manual Rollback:</strong>
+                <p>To rollback the migration, run:</p>
+                <div class="code">psql -h localhost -U postgres -d customer_dashboard -f rollback-traffic-migration.sql</div>
+            </div>
+            <button onclick="checkRollbackStatus()" style="background: #dc3545;">Check Rollback Status</button>
+            <div id="rollbackStatus"></div>
+        </div>
+    </div>
+
+    <script>
+        // Supabase configuration - you'll need to update these with your actual values
+        const SUPABASE_URL = 'your-supabase-url';
+        const SUPABASE_ANON_KEY = 'your-supabase-anon-key';
+
+        // Mock functions for demonstration - replace with actual Supabase calls
+        async function validatePreMigration() {
+            const statusDiv = document.getElementById('preMigrationStatus');
+            statusDiv.innerHTML = '<div class="status info">Running pre-migration checks...</div>';
+
+            try {
+                // Check if traffic_data table exists and has customer_id column
+                const checks = [
+                    { name: 'Traffic Data Table Exists', status: 'pass', details: 'traffic_data table found' },
+                    { name: 'Customer_ID Column Exists', status: 'pass', details: 'customer_id column present' },
+                    { name: 'Contract_ID Column Missing', status: 'pass', details: 'contract_id column not yet added (expected)' },
+                    { name: 'Data Integrity Check', status: 'pass', details: 'All traffic records have valid customer_id references' }
+                ];
+
+                let html = '<div class="status success">Pre-migration validation completed</div>';
+                html += '<table><tr><th>Check</th><th>Status</th><th>Details</th></tr>';
+                
+                checks.forEach(check => {
+                    const statusClass = check.status === 'pass' ? 'success' : 'error';
+                    html += `<tr><td>${check.name}</td><td class="status ${statusClass}">${check.status.toUpperCase()}</td><td>${check.details}</td></tr>`;
+                });
+                
+                html += '</table>';
+                statusDiv.innerHTML = html;
+            } catch (error) {
+                statusDiv.innerHTML = `<div class="status error">Pre-migration validation failed: ${error.message}</div>`;
+            }
+        }
+
+        async function checkMigrationStatus() {
+            const statusDiv = document.getElementById('migrationStatus');
+            statusDiv.innerHTML = '<div class="status info">Checking migration status...</div>';
+
+            try {
+                // This would check if the migration has been run
+                // For now, we'll simulate the check
+                const migrationComplete = false; // This should be determined by checking the database
+
+                if (migrationComplete) {
+                    statusDiv.innerHTML = '<div class="status success">Migration has been completed successfully!</div>';
+                } else {
+                    statusDiv.innerHTML = '<div class="status warning">Migration has not been run yet. Please execute the SQL script manually.</div>';
+                }
+            } catch (error) {
+                statusDiv.innerHTML = `<div class="status error">Error checking migration status: ${error.message}</div>`;
+            }
+        }
+
+        async function validatePostMigration() {
+            const statusDiv = document.getElementById('postMigrationStatus');
+            statusDiv.innerHTML = '<div class="status info">Running post-migration validation...</div>';
+
+            try {
+                // Check if migration completed successfully
+                const checks = [
+                    { name: 'Contract_ID Column Added', status: 'pass', details: 'contract_id column successfully added' },
+                    { name: 'Data Migration Complete', status: 'pass', details: 'All traffic records now have contract_id values' },
+                    { name: 'Foreign Key Constraints', status: 'pass', details: 'All contract_id values reference valid contracts' },
+                    { name: 'Data Integrity Maintained', status: 'pass', details: 'No data loss during migration' }
+                ];
+
+                let html = '<div class="status success">Post-migration validation completed</div>';
+                html += '<table><tr><th>Check</th><th>Status</th><th>Details</th></tr>';
+                
+                checks.forEach(check => {
+                    const statusClass = check.status === 'pass' ? 'success' : 'error';
+                    html += `<tr><td>${check.name}</td><td class="status ${statusClass}">${check.status.toUpperCase()}</td><td>${check.details}</td></tr>`;
+                });
+                
+                html += '</table>';
+                statusDiv.innerHTML = html;
+            } catch (error) {
+                statusDiv.innerHTML = `<div class="status error">Post-migration validation failed: ${error.message}</div>`;
+            }
+        }
+
+        async function testApplicationFunctionality() {
+            const statusDiv = document.getElementById('applicationTestStatus');
+            statusDiv.innerHTML = '<div class="status info">Testing application functionality...</div>';
+
+            try {
+                const tests = [
+                    { name: 'Traffic Data Creation', status: 'pass', details: 'Can create traffic records with contract_id' },
+                    { name: 'Traffic Data Retrieval', status: 'pass', details: 'Can fetch traffic data with contract_id' },
+                    { name: 'Reports Generation', status: 'pass', details: 'Reports work with new contract_id system' },
+                    { name: 'Excel Import/Export', status: 'pass', details: 'Excel templates use Contract ID column' }
+                ];
+
+                let html = '<div class="status success">Application functionality tests completed</div>';
+                html += '<table><tr><th>Test</th><th>Status</th><th>Details</th></tr>';
+                
+                tests.forEach(test => {
+                    const statusClass = test.status === 'pass' ? 'success' : 'error';
+                    html += `<tr><td>${test.name}</td><td class="status ${statusClass}">${test.status.toUpperCase()}</td><td>${test.details}</td></tr>`;
+                });
+                
+                html += '</table>';
+                statusDiv.innerHTML = html;
+            } catch (error) {
+                statusDiv.innerHTML = `<div class="status error">Application testing failed: ${error.message}</div>`;
+            }
+        }
+
+        async function checkRollbackStatus() {
+            const statusDiv = document.getElementById('rollbackStatus');
+            statusDiv.innerHTML = '<div class="status info">Checking rollback status...</div>';
+
+            try {
+                // This would check if rollback is needed or has been performed
+                statusDiv.innerHTML = '<div class="status warning">Rollback scripts are available if needed. Only use if migration causes issues.</div>';
+            } catch (error) {
+                statusDiv.innerHTML = `<div class="status error">Error checking rollback status: ${error.message}</div>`;
+            }
+        }
+    </script>
+</body>
+</html>

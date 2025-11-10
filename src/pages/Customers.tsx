@@ -9,6 +9,9 @@ const Customers: React.FC = () => {
   const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterOfficeName, setFilterOfficeName] = useState('');
+  const [filterServiceType, setFilterServiceType] = useState('');
+  const [filterPaymentType, setFilterPaymentType] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [formData, setFormData] = useState({
@@ -16,7 +19,8 @@ const Customers: React.FC = () => {
     officeName: '',
     serviceType: '',
     customerId: '',
-    contractId: ''
+    contractId: '',
+    paymentType: 'Advance' as 'Advance' | 'BNPL' // Added payment type with default
   });
 
   useEffect(() => {
@@ -25,7 +29,7 @@ const Customers: React.FC = () => {
 
   useEffect(() => {
     filterCustomers();
-  }, [customers, searchTerm]);
+  }, [customers, searchTerm, filterOfficeName, filterServiceType, filterPaymentType]);
 
   const loadCustomers = async () => {
     try {
@@ -42,17 +46,44 @@ const Customers: React.FC = () => {
   };
 
   const filterCustomers = () => {
-    if (!searchTerm) {
-      setFilteredCustomers(customers);
-    } else {
-      const filtered = customers.filter(customer =>
+    let filtered = customers;
+
+    // Search term filter
+    if (searchTerm) {
+      filtered = filtered.filter(customer =>
         customer.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         customer.officeName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         customer.serviceType.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        customer.customerId.toLowerCase().includes(searchTerm.toLowerCase())
+        customer.customerId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        customer.contractId.toLowerCase().includes(searchTerm.toLowerCase())
       );
-      setFilteredCustomers(filtered);
     }
+
+    // Office name filter
+    if (filterOfficeName) {
+      filtered = filtered.filter(customer => customer.officeName === filterOfficeName);
+    }
+
+    // Service type filter
+    if (filterServiceType) {
+      filtered = filtered.filter(customer => customer.serviceType === filterServiceType);
+    }
+
+    // Payment type filter
+    if (filterPaymentType) {
+      filtered = filtered.filter(customer => customer.paymentType === filterPaymentType);
+    }
+
+    setFilteredCustomers(filtered);
+  };
+
+  // Helper functions to get unique values for filter dropdowns
+  const getUniqueOfficeNames = () => {
+    return [...new Set(customers.map(customer => customer.officeName))].filter(Boolean).sort();
+  };
+
+  const getUniqueServiceTypes = () => {
+    return [...new Set(customers.map(customer => customer.serviceType))].filter(Boolean).sort();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -78,7 +109,8 @@ const Customers: React.FC = () => {
         officeName: '',
         serviceType: '',
         customerId: '',
-        contractId: ''
+        contractId: '',
+        paymentType: 'Advance' // Added payment type reset
       });
     } catch (error) {
       console.error('Error saving customer:', error);
@@ -92,7 +124,8 @@ const Customers: React.FC = () => {
       officeName: customer.officeName,
       serviceType: customer.serviceType,
       customerId: customer.customerId,
-      contractId: customer.contractId
+      contractId: customer.contractId,
+      paymentType: customer.paymentType || 'Advance' // Added payment type with fallback
     });
     setShowAddModal(true);
   };
@@ -117,6 +150,7 @@ const Customers: React.FC = () => {
       'Service Type': customer.serviceType,
       'Customer ID': customer.customerId,
       'Contract ID': customer.contractId,
+      'Payment Type': customer.paymentType, // Added payment type to export
       'Created At': customer.createdAt.toLocaleDateString()
     }));
     
@@ -129,7 +163,8 @@ const Customers: React.FC = () => {
       officeName: '',
       serviceType: '',
       customerId: '',
-      contractId: ''
+      contractId: '',
+      paymentType: 'Advance' // Added payment type reset
     });
     setEditingCustomer(null);
     setShowAddModal(false);
@@ -170,8 +205,8 @@ const Customers: React.FC = () => {
         </div>
       </div>
 
-      {/* Search */}
-      <div className="mb-6">
+      {/* Filters */}
+      <div className="mb-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
           <input
@@ -181,6 +216,58 @@ const Customers: React.FC = () => {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
+        </div>
+
+        <div>
+          <select
+            className="form-input"
+            value={filterOfficeName}
+            onChange={(e) => setFilterOfficeName(e.target.value)}
+          >
+            <option value="">All Offices</option>
+            {getUniqueOfficeNames().map((office) => (
+              <option key={office} value={office}>{office}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <select
+            className="form-input"
+            value={filterServiceType}
+            onChange={(e) => setFilterServiceType(e.target.value)}
+          >
+            <option value="">All Service Types</option>
+            {getUniqueServiceTypes().map((serviceType) => (
+              <option key={serviceType} value={serviceType}>{serviceType}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <select
+            className="form-input"
+            value={filterPaymentType}
+            onChange={(e) => setFilterPaymentType(e.target.value)}
+          >
+            <option value="">All Payment Types</option>
+            <option value="Advance">Advance</option>
+            <option value="BNPL">BNPL</option>
+          </select>
+        </div>
+
+        <div>
+          <button
+            onClick={() => {
+              setSearchTerm('');
+              setFilterOfficeName('');
+              setFilterServiceType('');
+              setFilterPaymentType('');
+            }}
+            className="btn btn-secondary w-full"
+          >
+            Clear Filters
+          </button>
         </div>
       </div>
 
@@ -193,6 +280,7 @@ const Customers: React.FC = () => {
                 <th>Customer Name</th>
                 <th>Office Name</th>
                 <th>Service Type</th>
+                <th>Payment Type</th>
                 <th>Customer ID</th>
                 <th>Contract ID</th>
                 <th>Created</th>
@@ -207,6 +295,15 @@ const Customers: React.FC = () => {
                   <td>
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                       {customer.serviceType}
+                    </span>
+                  </td>
+                  <td>
+                    <span className={`badge ${
+                      customer.paymentType === 'Advance'
+                        ? 'badge-advance'
+                        : 'badge-bnpl'
+                    }`}>
+                      {customer.paymentType || 'Advance'}
                     </span>
                   </td>
                   <td>{customer.customerId}</td>
@@ -305,7 +402,20 @@ const Customers: React.FC = () => {
                     required
                   />
                 </div>
-                
+
+                <div>
+                  <label className="form-label">Payment Type</label>
+                  <select
+                    className="form-input"
+                    value={formData.paymentType}
+                    onChange={(e) => setFormData({ ...formData, paymentType: e.target.value as 'Advance' | 'BNPL' })}
+                    required
+                  >
+                    <option value="Advance">Advance</option>
+                    <option value="BNPL">BNPL</option>
+                  </select>
+                </div>
+
                 <div className="flex justify-end space-x-3 pt-4">
                   <button
                     type="button"

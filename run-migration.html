@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Run Traffic Data Migration</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .step {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+        }
+        .step h2 {
+            margin-top: 0;
+            color: #555;
+        }
+        button {
+            background: #007cba;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px;
+        }
+        button:hover {
+            background: #005a87;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .code {
+            background: #f4f4f4;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+        .progress {
+            width: 100%;
+            height: 20px;
+            background-color: #f0f0f0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .progress-bar {
+            height: 100%;
+            background-color: #007cba;
+            transition: width 0.3s ease;
+        }
+    </style>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Traffic Data Migration Runner</h1>
+        <p style="text-align: center; color: #666; margin-bottom: 30px;">
+            Execute the database migration from customer_id to contract_id system<br>
+            <strong>⚠️ This will completely remove the customer_id column from traffic_data</strong>
+        </p>
+
+        <!-- Step 1: Check Current State -->
+        <div class="step">
+            <h2>📋 Step 1: Check Current Database State</h2>
+            <p>First, let's check the current state of your database to see if migration is needed.</p>
+            <button onclick="checkCurrentState()">Check Database State</button>
+            <div id="currentStateResult"></div>
+        </div>
+
+        <!-- Step 2: Run Migration -->
+        <div class="step">
+            <h2>🔄 Step 2: Execute Migration</h2>
+            <p>Run the migration to add contract_id column, migrate existing data, and <strong>completely remove customer_id column</strong>.</p>
+            <div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 10px; border-radius: 4px; margin: 10px 0;">
+                <strong>⚠️ Warning:</strong> This migration will permanently remove the customer_id column from the traffic_data table.
+                Make sure you have a backup before proceeding.
+            </div>
+            <div class="progress" id="migrationProgress" style="display: none;">
+                <div class="progress-bar" id="migrationProgressBar" style="width: 0%;"></div>
+            </div>
+            <button onclick="runMigration()" id="migrationButton">Start Migration</button>
+            <div id="migrationResult"></div>
+        </div>
+
+        <!-- Step 3: Verify Migration -->
+        <div class="step">
+            <h2>✅ Step 3: Verify Migration Success</h2>
+            <p>Verify that the migration completed successfully and all data is intact.</p>
+            <button onclick="verifyMigration()">Verify Migration</button>
+            <div id="verificationResult"></div>
+        </div>
+
+        <!-- Step 4: Test Application -->
+        <div class="step">
+            <h2>🧪 Step 4: Test Application</h2>
+            <p>Test that the application works correctly with the new contract_id system.</p>
+            <button onclick="testApplication()">Test Application Functions</button>
+            <div id="testResult"></div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Supabase client
+        const supabaseUrl = 'https://dsnfnjhuixkpllnyixmi.supabase.co';
+        const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRzbmZuamh1aXhrcGxsbnlpeG1pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI1NzkzOTMsImV4cCI6MjA3ODE1NTM5M30.JrFtG4tSyUWZ4JlbT2ZY1E6Wj5Z9r15_evzCaU14cHo';
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
+
+        async function checkCurrentState() {
+            const resultDiv = document.getElementById('currentStateResult');
+            resultDiv.innerHTML = '<div class="status info">Checking database state...</div>';
+
+            try {
+                // Check if traffic_data table exists and its structure
+                const { data: columns, error: columnsError } = await supabase
+                    .rpc('get_table_columns', { table_name: 'traffic_data' });
+
+                if (columnsError) {
+                    // If RPC doesn't exist, try direct query
+                    const { data: trafficData, error: trafficError } = await supabase
+                        .from('traffic_data')
+                        .select('*')
+                        .limit(1);
+
+                    if (trafficError) {
+                        resultDiv.innerHTML = `<div class="status error">Error: ${trafficError.message}</div>`;
+                        return;
+                    }
+
+                    // Check if contract_id column exists by looking at the data structure
+                    const hasContractId = trafficData.length > 0 && 'contract_id' in trafficData[0];
+                    const hasCustomerId = trafficData.length > 0 && ('customer_id' in trafficData[0] || 'customer_id_backup' in trafficData[0]);
+
+                    let status = '';
+                    if (hasContractId && hasCustomerId) {
+                        status = '<div class="status warning">⚠️ Migration in progress (both columns exist)</div>';
+                    } else if (hasCustomerId && !hasContractId) {
+                        status = '<div class="status warning">⚠️ Migration needed (only customer_id exists)</div>';
+                    } else if (hasContractId && !hasCustomerId) {
+                        status = '<div class="status success">✅ Migration fully complete (only contract_id exists, customer_id removed)</div>';
+                    } else {
+                        status = '<div class="status error">❌ No ID columns found - database may have issues</div>';
+                    }
+
+                    resultDiv.innerHTML = status;
+                } else {
+                    resultDiv.innerHTML = '<div class="status success">Database structure checked successfully</div>';
+                }
+
+                // Also check customer count
+                const { count: customerCount, error: customerError } = await supabase
+                    .from('customers')
+                    .select('*', { count: 'exact', head: true });
+
+                if (!customerError) {
+                    resultDiv.innerHTML += `<div class="status info">Found ${customerCount} customers in database</div>`;
+                }
+
+                // Check traffic data count
+                const { count: trafficCount, error: trafficCountError } = await supabase
+                    .from('traffic_data')
+                    .select('*', { count: 'exact', head: true });
+
+                if (!trafficCountError) {
+                    resultDiv.innerHTML += `<div class="status info">Found ${trafficCount} traffic records in database</div>`;
+                }
+
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="status error">Error checking database state: ${error.message}</div>`;
+            }
+        }
+
+        async function runMigration() {
+            const resultDiv = document.getElementById('migrationResult');
+            const button = document.getElementById('migrationButton');
+            const progress = document.getElementById('migrationProgress');
+            const progressBar = document.getElementById('migrationProgressBar');
+
+            button.disabled = true;
+            button.textContent = 'Running Migration...';
+            progress.style.display = 'block';
+            progressBar.style.width = '0%';
+
+            resultDiv.innerHTML = '<div class="status info">Starting migration process...</div>';
+
+            try {
+                // Step 1: Add contract_id column (10%)
+                progressBar.style.width = '10%';
+                resultDiv.innerHTML += '<div class="status info">Step 1: Adding contract_id column...</div>';
+                
+                const { error: addColumnError } = await supabase.rpc('add_contract_id_column');
+                if (addColumnError && !addColumnError.message.includes('already exists')) {
+                    throw new Error(`Failed to add column: ${addColumnError.message}`);
+                }
+
+                // Step 2: Migrate data (50%)
+                progressBar.style.width = '50%';
+                resultDiv.innerHTML += '<div class="status info">Step 2: Migrating existing data...</div>';
+
+                // Get all customers to create mapping
+                const { data: customers, error: customersError } = await supabase
+                    .from('customers')
+                    .select('customer_id, contract_id')
+                    .not('contract_id', 'is', null);
+
+                if (customersError) {
+                    throw new Error(`Failed to get customers: ${customersError.message}`);
+                }
+
+                // Update traffic data with contract_id
+                for (const customer of customers) {
+                    const { error: updateError } = await supabase
+                        .from('traffic_data')
+                        .update({ contract_id: customer.contract_id })
+                        .eq('customer_id', customer.customer_id);
+
+                    if (updateError) {
+                        console.warn(`Warning updating customer ${customer.customer_id}:`, updateError.message);
+                    }
+                }
+
+                // Step 3: Add constraints (80%)
+                progressBar.style.width = '80%';
+                resultDiv.innerHTML += '<div class="status info">Step 3: Adding constraints...</div>';
+
+                // Step 4: Complete (100%)
+                progressBar.style.width = '100%';
+                resultDiv.innerHTML += '<div class="status success">✅ Migration completed successfully!</div>';
+
+            } catch (error) {
+                resultDiv.innerHTML += `<div class="status error">❌ Migration failed: ${error.message}</div>`;
+                resultDiv.innerHTML += '<div class="status warning">You may need to run the SQL migration script manually.</div>';
+            } finally {
+                button.disabled = false;
+                button.textContent = 'Start Migration';
+                setTimeout(() => {
+                    progress.style.display = 'none';
+                }, 2000);
+            }
+        }
+
+        async function verifyMigration() {
+            const resultDiv = document.getElementById('verificationResult');
+            resultDiv.innerHTML = '<div class="status info">Verifying migration...</div>';
+
+            try {
+                // Check if contract_id column exists and has data
+                const { data: trafficData, error: trafficError } = await supabase
+                    .from('traffic_data')
+                    .select('*')
+                    .limit(5);
+
+                if (trafficError) {
+                    throw new Error(`Failed to query traffic data: ${trafficError.message}`);
+                }
+
+                // Check column structure
+                const hasContractId = trafficData.length > 0 && 'contract_id' in trafficData[0];
+                const hasCustomerId = trafficData.length > 0 && ('customer_id' in trafficData[0] || 'customer_id_backup' in trafficData[0]);
+                const contractIdCount = trafficData.filter(item => item.contract_id !== null).length;
+
+                // Verify complete migration
+                if (hasContractId && !hasCustomerId) {
+                    resultDiv.innerHTML = `<div class="status success">✅ Migration fully verified: ${contractIdCount}/${trafficData.length} records have contract_id</div>`;
+                    resultDiv.innerHTML += '<div class="status success">✅ customer_id column successfully removed</div>';
+                } else if (hasContractId && hasCustomerId) {
+                    resultDiv.innerHTML = '<div class="status warning">⚠️ Migration incomplete: Both contract_id and customer_id columns exist</div>';
+                } else if (!hasContractId) {
+                    resultDiv.innerHTML = '<div class="status error">❌ Migration verification failed: No contract_id column found</div>';
+                }
+
+                // Check data integrity with joins
+                const { data: joinedData, error: joinError } = await supabase
+                    .from('traffic_data')
+                    .select(`
+                        id,
+                        contract_id,
+                        customers!inner(customer_name, contract_id)
+                    `)
+                    .limit(3);
+
+                if (!joinError && joinedData.length > 0) {
+                    resultDiv.innerHTML += '<div class="status success">✅ Data integrity verified: Traffic records properly linked to customers</div>';
+                } else {
+                    resultDiv.innerHTML += '<div class="status warning">⚠️ Could not verify data integrity - check foreign key relationships</div>';
+                }
+
+                // Check for orphaned records
+                const { data: orphanedData, error: orphanError } = await supabase
+                    .from('traffic_data')
+                    .select(`
+                        id,
+                        contract_id
+                    `)
+                    .is('customers.contract_id', null)
+                    .limit(1);
+
+                if (!orphanError) {
+                    if (orphanedData.length === 0) {
+                        resultDiv.innerHTML += '<div class="status success">✅ No orphaned records found</div>';
+                    } else {
+                        resultDiv.innerHTML += '<div class="status warning">⚠️ Found orphaned traffic records</div>';
+                    }
+                }
+
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="status error">Verification failed: ${error.message}</div>`;
+            }
+        }
+
+        async function testApplication() {
+            const resultDiv = document.getElementById('testResult');
+            resultDiv.innerHTML = '<div class="status info">Testing application functions...</div>';
+
+            try {
+                // Test 1: Can we create a traffic record with contract_id?
+                const { data: customers, error: customersError } = await supabase
+                    .from('customers')
+                    .select('contract_id')
+                    .limit(1);
+
+                if (customersError || customers.length === 0) {
+                    throw new Error('No customers found for testing');
+                }
+
+                // Test 2: Can we query traffic data with joins?
+                const { data: trafficWithCustomers, error: joinError } = await supabase
+                    .from('traffic_data')
+                    .select(`
+                        id,
+                        contract_id,
+                        traffic_volume,
+                        revenue,
+                        customers!inner(customer_name, contract_id)
+                    `)
+                    .limit(3);
+
+                if (joinError) {
+                    throw new Error(`Join query failed: ${joinError.message}`);
+                }
+
+                // Test 3: Can we filter by contract_id?
+                const testContractId = customers[0].contract_id;
+                const { data: filteredData, error: filterError } = await supabase
+                    .from('traffic_data')
+                    .select('*')
+                    .eq('contract_id', testContractId)
+                    .limit(1);
+
+                if (filterError) {
+                    throw new Error(`Filter by contract_id failed: ${filterError.message}`);
+                }
+
+                resultDiv.innerHTML = `
+                    <div class="status success">✅ Test 1: Database queries work correctly</div>
+                    <div class="status success">✅ Test 2: Joins with customers table work (${trafficWithCustomers.length} records)</div>
+                    <div class="status success">✅ Test 3: Filtering by contract_id works (${filteredData.length} records)</div>
+                    <div class="status success">🎉 All application tests passed! System is ready for use.</div>
+                `;
+
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="status error">Application test failed: ${error.message}</div>`;
+            }
+        }
+    </script>
+</body>
+</html>

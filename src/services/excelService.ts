@@ -97,6 +97,7 @@ export const excelService = {
     const errors: string[] = [];
 
     // Required exact column names: 'Customer Name', 'Office Name', 'Service Type', 'Customer ID', 'Contract ID'
+    // Optional column: 'Payment Type' (defaults to 'Advance' if not provided)
 
     // Track duplicate contract_id within the Excel file itself
     // Note: Multiple rows with same customer_id are allowed as long as contract_id is different
@@ -123,6 +124,12 @@ export const excelService = {
         validationErrors.push({ field: 'Contract ID', message: 'Contract ID is required' });
       }
 
+      // Validate optional Payment Type field
+      const paymentType = row['Payment Type'] ? String(row['Payment Type']).trim() : '';
+      if (paymentType && !['Advance', 'BNPL'].includes(paymentType)) {
+        validationErrors.push({ field: 'Payment Type', message: 'Payment Type must be either "Advance" or "BNPL"' });
+      }
+
       // Check for duplicate contract_id within the Excel file
       // Note: Same customer_id is allowed with different contract_id values
       const customerId = String(row['Customer ID'] || '').trim();
@@ -139,12 +146,16 @@ export const excelService = {
       if (validationErrors.length > 0) {
         errors.push(`Row ${rowNumber}: ${validationErrors.map(e => e.message).join(', ')}`);
       } else {
+        // Get payment type or default to 'Advance'
+        const paymentType = row['Payment Type'] ? String(row['Payment Type']).trim() : 'Advance';
+
         validData.push({
           customerName: String(row['Customer Name']).trim(),
           officeName: String(row['Office Name']).trim(),
           serviceType: String(row['Service Type']).trim(),
           customerId: customerId,
-          contractId: contractId
+          contractId: contractId,
+          paymentType: (paymentType === 'Advance' || paymentType === 'BNPL') ? paymentType as 'Advance' | 'BNPL' : 'Advance'
         });
       }
     });
@@ -212,18 +223,18 @@ export const excelService = {
     const validData: Omit<TrafficData, 'id' | 'createdAt'>[] = [];
     const errors: string[] = [];
 
-    // Required exact column names: 'Customer ID', 'Date', 'Traffic', 'Revenue', 'Service Type'
+    // Required exact column names: 'Contract ID', 'Date', 'Traffic', 'Revenue', 'Service Type'
 
-    // Track duplicates within the Excel file (Customer ID + Date combinations)
-    const customerDateTracker = new Map<string, number[]>();
+    // Track duplicates within the Excel file (Contract ID + Date combinations)
+    const contractDateTracker = new Map<string, number[]>();
 
     data.forEach((row, index) => {
       const rowNumber = index + 2;
       const validationErrors: ValidationError[] = [];
 
       // Validate required fields using exact column names
-      if (!row['Customer ID'] || String(row['Customer ID']).trim() === '') {
-        validationErrors.push({ field: 'Customer ID', message: 'Customer ID is required' });
+      if (!row['Contract ID'] || String(row['Contract ID']).trim() === '') {
+        validationErrors.push({ field: 'Contract ID', message: 'Contract ID is required' });
       }
       if (!row['Date']) {
         validationErrors.push({ field: 'Date', message: 'Date is required' });
@@ -246,7 +257,7 @@ export const excelService = {
       }
 
       // Process date and check for duplicates within Excel file
-      const customerId = String(row['Customer ID'] || '').trim();
+      const contractId = String(row['Contract ID'] || '').trim();
       const dateValue = row['Date'];
       let parsedDate: Date;
 
@@ -258,15 +269,15 @@ export const excelService = {
           parsedDate = new Date(dateValue);
         }
 
-        if (!isNaN(parsedDate.getTime()) && customerId) {
-          // Create unique key for Customer ID + Date combination
+        if (!isNaN(parsedDate.getTime()) && contractId) {
+          // Create unique key for Contract ID + Date combination
           const dateString = parsedDate.toISOString().split('T')[0]; // YYYY-MM-DD format
-          const customerDateKey = `${customerId}|${dateString}`;
+          const contractDateKey = `${contractId}|${dateString}`;
 
-          if (customerDateTracker.has(customerDateKey)) {
-            customerDateTracker.get(customerDateKey)!.push(rowNumber);
+          if (contractDateTracker.has(contractDateKey)) {
+            contractDateTracker.get(contractDateKey)!.push(rowNumber);
           } else {
-            customerDateTracker.set(customerDateKey, [rowNumber]);
+            contractDateTracker.set(contractDateKey, [rowNumber]);
           }
         }
       }
@@ -285,7 +296,7 @@ export const excelService = {
           errors.push(`Row ${rowNumber}: Invalid date format`);
         } else {
           validData.push({
-            customerId: customerId,
+            contractId: contractId, // Changed from customerId to contractId
             date: parsedDate,
             trafficVolume: Number(row['Traffic']),
             revenue: Number(row['Revenue']),
@@ -295,47 +306,47 @@ export const excelService = {
       }
     });
 
-    // Check for duplicates within the Excel file (same Customer ID + Date)
-    customerDateTracker.forEach((rows, customerDateKey) => {
+    // Check for duplicates within the Excel file (same Contract ID + Date)
+    contractDateTracker.forEach((rows, contractDateKey) => {
       if (rows.length > 1) {
-        const [customerId, date] = customerDateKey.split('|');
-        errors.push(`Duplicate traffic entry for Customer ID "${customerId}" on date "${date}" found in Excel file at rows: ${rows.join(', ')}`);
+        const [contractId, date] = contractDateKey.split('|');
+        errors.push(`Duplicate traffic entry for Contract ID "${contractId}" on date "${date}" found in Excel file at rows: ${rows.join(', ')}`);
       }
     });
 
     return { validData, errors };
   },
 
-  // Check for duplicate traffic entries and validate Customer IDs in the database
+  // Check for duplicate traffic entries and validate Contract IDs in the database
   async checkTrafficDatabaseValidation(trafficData: Omit<TrafficData, 'id' | 'createdAt'>[]): Promise<{ validationErrors: string[]; hasErrors: boolean }> {
     const validationErrors: string[] = [];
 
     try {
-      // Extract unique Customer IDs from the traffic data
-      const uniqueCustomerIds = [...new Set(trafficData.map(t => t.customerId))];
+      // Extract unique Contract IDs from the traffic data
+      const uniqueContractIds = [...new Set(trafficData.map(t => t.contractId))];
 
-      // Check if all Customer IDs exist in the customers table
+      // Check if all Contract IDs exist in the customers table
       const { data: existingCustomers, error: customerError } = await supabase
         .from('customers')
-        .select('customer_id')
-        .in('customer_id', uniqueCustomerIds);
+        .select('contract_id')
+        .in('contract_id', uniqueContractIds);
 
       if (customerError) {
-        throw new Error(`Failed to check existing Customer IDs: ${customerError.message}`);
+        throw new Error(`Failed to check existing Contract IDs: ${customerError.message}`);
       }
 
-      const existingCustomerIds = new Set(existingCustomers?.map((c: any) => c.customer_id) || []);
+      const existingContractIds = new Set(existingCustomers?.map((c: any) => c.contract_id) || []);
 
-      // Check for non-existent Customer IDs
+      // Check for non-existent Contract IDs
       trafficData.forEach((traffic, index) => {
         const rowNumber = index + 2; // Excel row number (accounting for header)
 
-        if (!existingCustomerIds.has(traffic.customerId)) {
-          validationErrors.push(`Row ${rowNumber}: Customer ID "${traffic.customerId}" does not exist in the customer table`);
+        if (!existingContractIds.has(traffic.contractId)) {
+          validationErrors.push(`Row ${rowNumber}: Contract ID "${traffic.contractId}" does not exist in the customer table`);
         }
       });
 
-      // If there are invalid Customer IDs, don't proceed with duplicate checking
+      // If there are invalid Contract IDs, don't proceed with duplicate checking
       if (validationErrors.length > 0) {
         return {
           validationErrors,
@@ -343,18 +354,18 @@ export const excelService = {
         };
       }
 
-      // Check for existing traffic entries (Customer ID + Date combinations) in database
+      // Check for existing traffic entries (Contract ID + Date combinations) in database
       const trafficChecks = trafficData.map(traffic => ({
-        customer_id: traffic.customerId,
+        contract_id: traffic.contractId, // Changed from customer_id to contract_id
         date: traffic.date.toISOString().split('T')[0] // YYYY-MM-DD format
       }));
 
-      // Build a query to check for existing Customer ID + Date combinations
+      // Build a query to check for existing Contract ID + Date combinations
       const existingTrafficPromises = trafficChecks.map(async (check) => {
         const { data, error } = await supabase
           .from('traffic_data')
-          .select('customer_id, date')
-          .eq('customer_id', check.customer_id)
+          .select('contract_id, date') // Changed from customer_id to contract_id
+          .eq('contract_id', check.contract_id) // Changed from customer_id to contract_id
           .eq('date', check.date)
           .limit(1);
 
@@ -363,7 +374,7 @@ export const excelService = {
         }
 
         return {
-          customerDate: `${check.customer_id}|${check.date}`,
+          contractDate: `${check.contract_id}|${check.date}`, // Changed from customerDate to contractDate
           exists: data && data.length > 0
         };
       });
@@ -372,17 +383,17 @@ export const excelService = {
       const existingTrafficSet = new Set(
         existingTrafficResults
           .filter(result => result.exists)
-          .map(result => result.customerDate)
+          .map(result => result.contractDate) // Changed from customerDate to contractDate
       );
 
       // Check each traffic record for database duplicates
       trafficData.forEach((traffic, index) => {
         const rowNumber = index + 2; // Excel row number (accounting for header)
         const dateString = traffic.date.toISOString().split('T')[0];
-        const customerDateKey = `${traffic.customerId}|${dateString}`;
+        const contractDateKey = `${traffic.contractId}|${dateString}`; // Changed from customerId to contractId
 
-        if (existingTrafficSet.has(customerDateKey)) {
-          validationErrors.push(`Row ${rowNumber}: Traffic entry for Customer ID "${traffic.customerId}" on date "${dateString}" already exists in the system`);
+        if (existingTrafficSet.has(contractDateKey)) {
+          validationErrors.push(`Row ${rowNumber}: Traffic entry for Contract ID "${traffic.contractId}" on date "${dateString}" already exists in the system`);
         }
       });
 

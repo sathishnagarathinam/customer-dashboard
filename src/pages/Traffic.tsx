@@ -11,11 +11,13 @@ const Traffic: React.FC = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterCustomerId, setFilterCustomerId] = useState('');
+  const [filterContractId, setFilterContractId] = useState(''); // Changed from filterCustomerId
+  const [startDate, setStartDate] = useState(''); // Added start date filter
+  const [endDate, setEndDate] = useState(''); // Added end date filter
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingData, setEditingData] = useState<TrafficData | null>(null);
   const [formData, setFormData] = useState({
-    customerId: '',
+    contractId: '', // Changed from customerId
     date: '',
     trafficVolume: '',
     revenue: '',
@@ -28,7 +30,7 @@ const Traffic: React.FC = () => {
 
   useEffect(() => {
     filterData();
-  }, [trafficData, searchTerm, filterCustomerId]);
+  }, [trafficData, searchTerm, filterContractId, startDate, endDate]); // Added date filters
 
   const loadData = async () => {
     try {
@@ -54,18 +56,35 @@ const Traffic: React.FC = () => {
 
   const filterData = () => {
     let filtered = trafficData;
-    
+
     if (searchTerm) {
       filtered = filtered.filter(item =>
-        item.customerId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.contractId.toLowerCase().includes(searchTerm.toLowerCase()) || // Changed from customerId
         item.serviceType.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
-    
-    if (filterCustomerId) {
-      filtered = filtered.filter(item => item.customerId === filterCustomerId);
+
+    if (filterContractId) {
+      filtered = filtered.filter(item => item.contractId === filterContractId); // Changed from customerId
     }
-    
+
+    // Date filtering
+    if (startDate) {
+      filtered = filtered.filter(item => {
+        const itemDate = new Date(item.date);
+        const filterStartDate = new Date(startDate);
+        return itemDate >= filterStartDate;
+      });
+    }
+
+    if (endDate) {
+      filtered = filtered.filter(item => {
+        const itemDate = new Date(item.date);
+        const filterEndDate = new Date(endDate);
+        return itemDate <= filterEndDate;
+      });
+    }
+
     setFilteredData(filtered);
   };
 
@@ -74,7 +93,7 @@ const Traffic: React.FC = () => {
     
     try {
       const data = {
-        customerId: formData.customerId,
+        contractId: formData.contractId, // Changed from customerId
         date: new Date(formData.date),
         trafficVolume: Number(formData.trafficVolume),
         revenue: Number(formData.revenue),
@@ -104,7 +123,7 @@ const Traffic: React.FC = () => {
   const handleEdit = (data: TrafficData) => {
     setEditingData(data);
     setFormData({
-      customerId: data.customerId,
+      contractId: data.contractId, // Changed from customerId
       date: data.date.toISOString().split('T')[0],
       trafficVolume: data.trafficVolume.toString(),
       revenue: data.revenue.toString(),
@@ -128,19 +147,19 @@ const Traffic: React.FC = () => {
 
   const handleExport = () => {
     const exportData = filteredData.map(item => ({
-      'Customer ID': item.customerId,
+      'Contract ID': item.contractId, // Changed from customerId to contractId
       'Date': item.date.toLocaleDateString(),
       'Traffic Volume': item.trafficVolume,
       'Revenue': item.revenue,
       'Service Type': item.serviceType
     }));
-    
+
     excelService.exportToExcel(exportData, 'traffic-data', 'Traffic Data');
   };
 
   const resetForm = () => {
     setFormData({
-      customerId: '',
+      contractId: '', // Changed from customerId
       date: '',
       trafficVolume: '',
       revenue: '',
@@ -150,9 +169,14 @@ const Traffic: React.FC = () => {
     setShowAddModal(false);
   };
 
-  const getCustomerName = (customerId: string) => {
-    const customer = customers.find(c => c.customerId === customerId);
-    return customer ? customer.customerName : customerId;
+  const getCustomerByContractId = (contractId: string) => {
+    const customer = customers.find(c => c.contractId === contractId);
+    return customer;
+  };
+
+  const getCustomerName = (contractId: string) => {
+    const customer = getCustomerByContractId(contractId);
+    return customer ? customer.customerName : contractId;
   };
 
   const formatCurrency = (amount: number) => {
@@ -202,32 +226,52 @@ const Traffic: React.FC = () => {
       </div>
 
       {/* Filters */}
-      <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="mb-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
           <input
             type="text"
-            placeholder="Search by Customer ID or Service Type..."
+            placeholder="Search by Contract ID or Service Type..."
             className="form-input pl-10"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-        
+
         <div className="relative">
           <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
           <select
             className="form-input pl-10"
-            value={filterCustomerId}
-            onChange={(e) => setFilterCustomerId(e.target.value)}
+            value={filterContractId} // Changed from filterCustomerId
+            onChange={(e) => setFilterContractId(e.target.value)} // Changed from setFilterCustomerId
           >
-            <option value="">All Customers</option>
+            <option value="">All Contracts</option>
             {customers.map((customer) => (
-              <option key={customer.id} value={customer.customerId}>
-                {customer.customerName} ({customer.customerId})
+              <option key={customer.id} value={customer.contractId}> {/* Changed from customerId */}
+                {customer.customerName} ({customer.contractId}) {/* Changed from customerId */}
               </option>
             ))}
           </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+          <input
+            type="date"
+            className="form-input"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+          <input
+            type="date"
+            className="form-input"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+          />
         </div>
       </div>
 
@@ -250,8 +294,8 @@ const Traffic: React.FC = () => {
                 <tr key={item.id}>
                   <td>
                     <div>
-                      <div className="font-medium">{getCustomerName(item.customerId)}</div>
-                      <div className="text-sm text-gray-500">{item.customerId}</div>
+                      <div className="font-medium">{getCustomerName(item.contractId)}</div> {/* Changed from customerId */}
+                      <div className="text-sm text-gray-500">{item.contractId}</div> {/* Changed from customerId */}
                     </div>
                   </td>
                   <td>{item.date.toLocaleDateString()}</td>
@@ -302,17 +346,17 @@ const Traffic: React.FC = () => {
               
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="form-label">Customer</label>
+                  <label className="form-label">Contract</label>
                   <select
                     className="form-input"
-                    value={formData.customerId}
-                    onChange={(e) => setFormData({ ...formData, customerId: e.target.value })}
+                    value={formData.contractId} // Changed from customerId
+                    onChange={(e) => setFormData({ ...formData, contractId: e.target.value })} // Changed from customerId
                     required
                   >
-                    <option value="">Select Customer</option>
+                    <option value="">Select Contract</option>
                     {customers.map((customer) => (
-                      <option key={customer.id} value={customer.customerId}>
-                        {customer.customerName} ({customer.customerId})
+                      <option key={customer.id} value={customer.contractId}> {/* Changed from customerId */}
+                        {customer.customerName} ({customer.contractId}) {/* Changed from customerId */}
                       </option>
                     ))}
                   </select>

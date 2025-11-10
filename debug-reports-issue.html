@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Reports Issue</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        .warning { background-color: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+        pre {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Debug Reports Issue</h1>
+        <p>This tool helps diagnose why reports are not generating after the contract_id changes.</p>
+        
+        <div id="status" class="status info">
+            Ready to debug reports...
+        </div>
+
+        <div style="margin: 20px 0;">
+            <button onclick="checkDatabaseData()">1. Check Database Data</button>
+            <button onclick="testTrafficQuery()">2. Test Traffic Query</button>
+            <button onclick="testReportGeneration()">3. Test Report Generation</button>
+            <button onclick="runFullDiagnostic()">🚀 Run Full Diagnostic</button>
+        </div>
+
+        <div id="results"></div>
+    </div>
+
+    <script>
+        // Initialize Supabase client
+        const supabaseUrl = 'https://dsnfnjhuixkpllnyixmi.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRzbmZuamh1aXhrcGxsbnlpeG1pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI1NzkzOTMsImV4cCI6MjA3ODE1NTM5M30.JrFtG4tSyUWZ4JlbT2ZY1E6Wj5Z9r15_evzCaU14cHo';
+        
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+        function updateStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+        }
+
+        function displayResults(title, data, type = 'info') {
+            const resultsDiv = document.getElementById('results');
+            const sectionClass = type === 'error' ? 'error' : type === 'success' ? 'success' : type === 'warning' ? 'warning' : 'info';
+            
+            let content = '';
+            if (typeof data === 'string') {
+                content = `<pre>${data}</pre>`;
+            } else if (Array.isArray(data) && data.length > 0) {
+                // Create a table for array data
+                const keys = Object.keys(data[0]);
+                content = `
+                    <table>
+                        <thead>
+                            <tr>${keys.map(key => `<th>${key}</th>`).join('')}</tr>
+                        </thead>
+                        <tbody>
+                            ${data.slice(0, 10).map(item => 
+                                `<tr>${keys.map(key => `<td>${JSON.stringify(item[key])}</td>`).join('')}</tr>`
+                            ).join('')}
+                        </tbody>
+                    </table>
+                    ${data.length > 10 ? `<p><em>Showing first 10 of ${data.length} records</em></p>` : ''}
+                `;
+            } else {
+                content = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+            }
+            
+            resultsDiv.innerHTML += `
+                <div class="section ${sectionClass}">
+                    <h3>${title}</h3>
+                    ${content}
+                </div>
+            `;
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+
+        async function checkDatabaseData() {
+            updateStatus('Checking database data...', 'info');
+            clearResults();
+            
+            try {
+                // Check customers table
+                const { data: customers, error: customersError } = await supabase
+                    .from('customers')
+                    .select('*')
+                    .limit(10);
+
+                if (customersError) throw customersError;
+
+                displayResults('✅ Customers Table Sample', customers, 'success');
+
+                // Check traffic_data table
+                const { data: traffic, error: trafficError } = await supabase
+                    .from('traffic_data')
+                    .select('*')
+                    .limit(10);
+
+                if (trafficError) throw trafficError;
+
+                displayResults('✅ Traffic Data Table Sample', traffic, 'success');
+
+                // Check for data relationships
+                const customerIds = customers.map(c => c.customer_id);
+                const trafficCustomerIds = [...new Set(traffic.map(t => t.customer_id))];
+                
+                const analysis = `
+Database Analysis:
+• Total customers in sample: ${customers.length}
+• Unique customer_ids in customers: ${[...new Set(customers.map(c => c.customer_id))].length}
+• Total traffic records in sample: ${traffic.length}
+• Unique customer_ids in traffic: ${trafficCustomerIds.length}
+• Customer IDs in traffic that exist in customers: ${trafficCustomerIds.filter(id => customerIds.includes(id)).length}
+• Customer IDs in traffic that DON'T exist in customers: ${trafficCustomerIds.filter(id => !customerIds.includes(id)).length}
+
+Contract ID Analysis:
+• Customers with contract_id: ${customers.filter(c => c.contract_id).length}
+• Unique contract_ids: ${[...new Set(customers.map(c => c.contract_id).filter(Boolean))].length}
+                `;
+
+                displayResults('📊 Data Relationship Analysis', analysis, 'info');
+
+                updateStatus('✅ Database data check complete', 'success');
+                
+            } catch (error) {
+                updateStatus(`❌ Database check failed: ${error.message}`, 'error');
+                displayResults('Database Check Error', error, 'error');
+            }
+        }
+
+        async function testTrafficQuery() {
+            updateStatus('Testing traffic query with customers...', 'info');
+            
+            try {
+                // Test the exact query used in the application
+                const { data, error } = await supabase
+                    .from('traffic_data')
+                    .select(`
+                        *,
+                        customers!inner(
+                            id,
+                            customer_name,
+                            office_name,
+                            service_type,
+                            customer_id,
+                            contract_id,
+                            created_at,
+                            updated_at
+                        )
+                    `)
+                    .order('date', { ascending: false })
+                    .limit(10);
+
+                if (error) throw error;
+
+                displayResults('✅ Traffic Query with Customers', data, 'success');
+
+                // Analyze the joined data
+                const analysis = `
+Query Results Analysis:
+• Total joined records: ${data.length}
+• Records with customer data: ${data.filter(d => d.customers).length}
+• Unique customers in results: ${[...new Set(data.map(d => d.customers?.customer_id).filter(Boolean))].length}
+• Records with contract_id: ${data.filter(d => d.customers?.contract_id).length}
+
+Sample customer data structure:
+${data.length > 0 ? JSON.stringify(data[0].customers, null, 2) : 'No data'}
+                `;
+
+                displayResults('📊 Query Analysis', analysis, 'info');
+
+                updateStatus('✅ Traffic query test complete', 'success');
+                
+            } catch (error) {
+                updateStatus(`❌ Traffic query failed: ${error.message}`, 'error');
+                displayResults('Traffic Query Error', error, 'error');
+                
+                // If inner join fails, try without inner join
+                try {
+                    const { data: fallbackData, error: fallbackError } = await supabase
+                        .from('traffic_data')
+                        .select('*')
+                        .limit(5);
+                    
+                    if (!fallbackError) {
+                        displayResults('⚠️ Fallback: Traffic Data Only', fallbackData, 'warning');
+                        displayResults('🔍 Issue Identified', 'The inner join is failing. This suggests there are traffic records with customer_ids that don\'t exist in the customers table, or there\'s an issue with the foreign key relationship.', 'error');
+                    }
+                } catch (fallbackError) {
+                    displayResults('Fallback Query Error', fallbackError, 'error');
+                }
+            }
+        }
+
+        async function testReportGeneration() {
+            updateStatus('Testing report generation logic...', 'info');
+            
+            try {
+                // Simulate the report generation process
+                const { data: trafficWithCustomers, error } = await supabase
+                    .from('traffic_data')
+                    .select(`
+                        *,
+                        customers!inner(
+                            id,
+                            customer_name,
+                            office_name,
+                            service_type,
+                            customer_id,
+                            contract_id,
+                            created_at,
+                            updated_at
+                        )
+                    `)
+                    .order('date', { ascending: false });
+
+                if (error) throw error;
+
+                // Process the data like the application does
+                const customerMap = new Map();
+                trafficWithCustomers.forEach(item => {
+                    if (!customerMap.has(item.customers.customer_id)) {
+                        customerMap.set(item.customers.customer_id, {
+                            id: item.customers.id,
+                            customerName: item.customers.customer_name,
+                            officeName: item.customers.office_name,
+                            serviceType: item.customers.service_type,
+                            customerId: item.customers.customer_id,
+                            contractId: item.customers.contract_id,
+                            createdAt: new Date(item.customers.created_at),
+                            updatedAt: new Date(item.customers.updated_at)
+                        });
+                    }
+                });
+                const uniqueCustomers = Array.from(customerMap.values());
+
+                // Calculate summary statistics
+                const totalRevenue = trafficWithCustomers.reduce((sum, item) => sum + item.revenue, 0);
+                const totalTraffic = trafficWithCustomers.reduce((sum, item) => sum + item.traffic_volume, 0);
+                const averageRevenuePerCustomer = uniqueCustomers.length > 0 ? totalRevenue / uniqueCustomers.length : 0;
+
+                const reportSummary = {
+                    totalCustomers: uniqueCustomers.length,
+                    totalRevenue,
+                    totalTraffic,
+                    averageRevenuePerCustomer,
+                    totalTrafficRecords: trafficWithCustomers.length
+                };
+
+                displayResults('✅ Report Generation Test', reportSummary, 'success');
+                displayResults('📋 Sample Customers', uniqueCustomers.slice(0, 5), 'info');
+
+                updateStatus('✅ Report generation test complete', 'success');
+                
+            } catch (error) {
+                updateStatus(`❌ Report generation failed: ${error.message}`, 'error');
+                displayResults('Report Generation Error', error, 'error');
+            }
+        }
+
+        async function runFullDiagnostic() {
+            clearResults();
+            updateStatus('Running full diagnostic...', 'info');
+            
+            displayResults('🚀 Starting Full Reports Diagnostic', 'Checking all aspects of the reporting system...', 'info');
+            
+            await checkDatabaseData();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            await testTrafficQuery();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            await testReportGeneration();
+            
+            updateStatus('🎯 Full diagnostic complete - check results above', 'info');
+        }
+    </script>
+</body>
+</html>

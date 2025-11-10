@@ -34,6 +34,7 @@ export const customerService = {
           service_type: customerData.serviceType,
           customer_id: customerData.customerId,
           contract_id: customerData.contractId,
+          payment_type: customerData.paymentType || 'Advance', // Added payment type with default
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         }])
@@ -49,6 +50,7 @@ export const customerService = {
         serviceType: data.service_type,
         customerId: data.customer_id,
         contractId: data.contract_id,
+        paymentType: data.payment_type || 'Advance', // Added payment type mapping
         createdAt: new Date(data.created_at),
         updatedAt: new Date(data.updated_at)
       };
@@ -77,6 +79,7 @@ export const customerService = {
         serviceType: row.service_type,
         customerId: row.customer_id,
         contractId: row.contract_id,
+        paymentType: row.payment_type || 'Advance', // Added payment type mapping
         createdAt: new Date(row.created_at),
         updatedAt: new Date(row.updated_at)
       }));
@@ -111,6 +114,7 @@ export const customerService = {
         serviceType: data.service_type,
         customerId: data.customer_id,
         contractId: data.contract_id,
+        paymentType: data.payment_type || 'Advance', // Added payment type mapping
         createdAt: new Date(data.created_at),
         updatedAt: new Date(data.updated_at)
       };
@@ -134,6 +138,7 @@ export const customerService = {
       if (updates.serviceType) updateData.service_type = updates.serviceType;
       if (updates.customerId) updateData.customer_id = updates.customerId;
       if (updates.contractId) updateData.contract_id = updates.contractId;
+      if (updates.paymentType) updateData.payment_type = updates.paymentType; // Added payment type update
 
       const { data, error } = await supabase
         .from(CUSTOMERS_TABLE)
@@ -151,6 +156,7 @@ export const customerService = {
         serviceType: data.service_type,
         customerId: data.customer_id,
         contractId: data.contract_id,
+        paymentType: data.payment_type || 'Advance', // Added payment type mapping
         createdAt: new Date(data.created_at),
         updatedAt: new Date(data.updated_at)
       };
@@ -197,6 +203,7 @@ export const customerService = {
         serviceType: row.service_type,
         customerId: row.customer_id,
         contractId: row.contract_id,
+        paymentType: row.payment_type || 'Advance', // Added payment type mapping
         createdAt: new Date(row.created_at),
         updatedAt: new Date(row.updated_at)
       }));
@@ -278,6 +285,7 @@ export const customerService = {
         service_type: customer.serviceType,
         customer_id: customer.customerId,
         contract_id: customer.contractId,
+        payment_type: customer.paymentType || 'Advance', // Added payment type with default
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       }));

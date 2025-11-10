@@ -6,6 +6,7 @@ export interface Customer {
   serviceType: string;
   customerId: string;
   contractId: string;
+  paymentType: 'Advance' | 'BNPL'; // Added payment type field
   createdAt: Date;
   updatedAt: Date;
 }
@@ -13,7 +14,7 @@ export interface Customer {
 // Traffic and Revenue data types
 export interface TrafficData {
   id: string;
-  customerId: string;
+  contractId: string; // Changed from customerId to contractId
   date: Date;
   trafficVolume: number;
   revenue: number;
@@ -27,7 +28,9 @@ export interface ReportFilter {
   endDate?: Date;
   officeName?: string;
   serviceType?: string;
-  customerId?: string;
+  paymentType?: string; // Added payment type filter
+  customerId?: string; // Keep customerId for customer-level filtering
+  contractId?: string; // Add contractId for contract-level filtering
   topCustomersLimit?: string;
 }
 
