@@ -69,15 +69,39 @@ const Reports: React.FC = () => {
 
       const trafficWithCustomers = trafficWithCustomersResponse.data;
 
-      // Group data by month for month-wise reporting
-      const monthlyData = new Map();
+      // Group data by customer and month for month-wise reporting (customers as rows, months as columns)
+      const customerMonthlyData = new Map();
+      const allMonths = new Set();
+
       trafficWithCustomers.forEach(item => {
+        const customerId = item.customer.customerId;
         const monthKey = new Date(item.date).toISOString().slice(0, 7); // YYYY-MM format
-        if (!monthlyData.has(monthKey)) {
-          monthlyData.set(monthKey, []);
+        allMonths.add(monthKey);
+
+        if (!customerMonthlyData.has(customerId)) {
+          customerMonthlyData.set(customerId, {
+            customer: item.customer,
+            months: new Map()
+          });
         }
-        monthlyData.get(monthKey).push(item);
+
+        const customerData = customerMonthlyData.get(customerId);
+        if (!customerData.months.has(monthKey)) {
+          customerData.months.set(monthKey, {
+            traffic: 0,
+            revenue: 0,
+            records: 0
+          });
+        }
+
+        const monthData = customerData.months.get(monthKey);
+        monthData.traffic += item.trafficVolume;
+        monthData.revenue += item.revenue;
+        monthData.records += 1;
       });
+
+      // Sort months chronologically
+      const sortedMonths = Array.from(allMonths).sort();
 
       // Extract unique customers from the traffic data
       const customerMap = new Map();
@@ -104,16 +128,13 @@ const Reports: React.FC = () => {
         }
       };
 
-      // Apply top customers limit if specified and add month-wise breakdown
+      // Apply top customers limit if specified and add month-wise matrix
       const finalReport = applyTopCustomersLimit(report);
-      // Add monthly breakdown to the report
-      (finalReport as any).monthlyBreakdown = Array.from(monthlyData.entries()).map(([month, data]) => ({
-        month,
-        totalRevenue: data.reduce((sum: number, item: any) => sum + item.revenue, 0),
-        totalTraffic: data.reduce((sum: number, item: any) => sum + item.trafficVolume, 0),
-        customerCount: new Set(data.map((item: any) => item.customer.customerId)).size,
-        records: data.length
-      })).sort((a, b) => a.month.localeCompare(b.month));
+      // Add month-wise matrix data (customers as rows, months as columns)
+      (finalReport as any).monthlyMatrix = {
+        customers: Array.from(customerMonthlyData.values()),
+        months: sortedMonths
+      };
 
       setReportData(finalReport);
     } catch (error) {
@@ -243,49 +264,45 @@ const Reports: React.FC = () => {
           'Average Traffic per Record': item.recordCount > 0 ? (item.totalTraffic / item.recordCount).toFixed(2) : '0'
         }));
       } else {
-        // For month-wise reports: Show individual monthly records
-        // Calculate customer total revenues for proper sorting
-        const customerTotalRevenues = new Map<string, number>();
-        reportData.trafficData.forEach(item => {
-          const customerId = item.customer.customerId;
-          const currentTotal = customerTotalRevenues.get(customerId) || 0;
-          customerTotalRevenues.set(customerId, currentTotal + item.revenue);
-        });
-
-        // Comprehensive traffic data with full customer information, sorted by customer total revenue (highest first)
-        comprehensiveData = reportData.trafficData
-          .map(item => {
-            const customer = (item as any).customer;
-            const customerId = customer?.customerId || 'Unknown';
-            return {
-              'Date': `${item.date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`,
-              'Customer Name': customer?.customerName || 'Unknown',
-              'Customer ID': customerId,
-              'Office Name': customer?.officeName || 'Unknown',
-              'Contract ID': item.contractId || customer?.contractId || 'Unknown',
-              'Service Type': item.serviceType,
-              'Payment Type': customer?.paymentType || 'Advance',
-              'Traffic Volume': item.trafficVolume,
-              'Revenue': item.revenue,
-              'Revenue per Traffic': item.trafficVolume > 0 ? (item.revenue / item.trafficVolume).toFixed(2) : '0',
-              // Add customer total revenue for sorting
-              _customerTotalRevenue: customerTotalRevenues.get(customerId) || 0,
-              _individualRevenue: item.revenue
+        // For month-wise reports: Show matrix format (customers as rows, months as columns)
+        const monthlyMatrix = (reportData as any).monthlyMatrix;
+        if (monthlyMatrix) {
+          comprehensiveData = monthlyMatrix.customers.map((customerData: any, index: number) => {
+            const exportRow: any = {
+              'SL No': index + 1,
+              'Customer Name': customerData.customer.customerName,
+              'Service Type': customerData.customer.serviceType,
+              'Customer ID': customerData.customer.customerId,
+              'Office Name': customerData.customer.officeName,
+              'Contract ID': customerData.customer.contractId,
+              'Payment Type': customerData.customer.paymentType || 'Advance'
             };
-          })
-          .sort((a, b) => {
-            // Primary sort: by customer total revenue (descending)
-            if (a._customerTotalRevenue !== b._customerTotalRevenue) {
-              return b._customerTotalRevenue - a._customerTotalRevenue;
-            }
-            // Secondary sort: by individual record revenue (descending)
-            return b._individualRevenue - a._individualRevenue;
-          })
-          .map(item => {
-            // Remove the sorting fields from export
-            const { _customerTotalRevenue, _individualRevenue, ...exportItem } = item;
-            return exportItem;
+
+            // Add columns for each month (Traffic and Revenue)
+            monthlyMatrix.months.forEach((month: string) => {
+              const monthData = customerData.months.get(month);
+              const monthLabel = new Date(month + '-01').toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+
+              exportRow[`${monthLabel} Traffic`] = monthData ? monthData.traffic : 0;
+              exportRow[`${monthLabel} Revenue`] = monthData ? monthData.revenue : 0;
+            });
+
+            // Add total columns
+            let totalTraffic = 0;
+            let totalRevenue = 0;
+            customerData.months.forEach((monthData: any) => {
+              totalTraffic += monthData.traffic;
+              totalRevenue += monthData.revenue;
+            });
+
+            exportRow['Total Traffic'] = totalTraffic;
+            exportRow['Total Revenue'] = totalRevenue;
+
+            return exportRow;
           });
+        } else {
+          comprehensiveData = [];
+        }
       }
 
       // Export comprehensive data including summary
@@ -662,17 +679,17 @@ const Reports: React.FC = () => {
             </div>
           </div>
 
-          {/* Month-wise or Consolidated Breakdown */}
-          {((reportData as any).monthlyBreakdown || (reportData as any).consolidatedData) && (
+          {/* Month-wise Matrix or Consolidated Breakdown */}
+          {((reportData as any).monthlyMatrix || (reportData as any).consolidatedData) && (
             <div className="card">
               <div className="card-header">
                 <h3 className="text-lg font-medium text-gray-900">
-                  {(reportData as any).isConsolidated ? 'Consolidated Customer Summary' : 'Monthly Breakdown'}
+                  {(reportData as any).isConsolidated ? 'Consolidated Customer Summary' : 'Month-wise Customer Performance'}
                 </h3>
                 <p className="text-sm text-gray-500 mt-1">
                   {(reportData as any).isConsolidated
                     ? 'Total performance by customer across the selected period'
-                    : 'Revenue and traffic data grouped by month'}
+                    : 'Traffic and revenue data by customer and month'}
                 </p>
               </div>
 
@@ -693,11 +710,20 @@ const Reports: React.FC = () => {
                         </>
                       ) : (
                         <>
-                          <th>Month</th>
-                          <th>Revenue</th>
-                          <th>Traffic</th>
-                          <th>Customers</th>
-                          <th>Records</th>
+                          <th>SL No</th>
+                          <th>Customer Name</th>
+                          <th>Service Type</th>
+                          <th>Customer ID</th>
+                          {(reportData as any).monthlyMatrix?.months.map((month: string) => (
+                            <React.Fragment key={month}>
+                              <th className="text-center" style={{ color: '#831843' }}>
+                                {new Date(month + '-01').toLocaleDateString('en-US', { month: 'short', year: '2-digit' })}
+                              </th>
+                              <th className="text-center text-xs" style={{ color: '#be185d' }}>
+                                Revenue
+                              </th>
+                            </React.Fragment>
+                          ))}
                         </>
                       )}
                     </tr>
@@ -726,17 +752,25 @@ const Reports: React.FC = () => {
                             </td>
                           </tr>
                         ))
-                      : (reportData as any).monthlyBreakdown?.map((month: any) => (
-                          <tr key={month.month} className="table-row">
-                            <td className="font-medium" style={{ color: '#831843' }}>
-                              {new Date(month.month + '-01').toLocaleDateString('en-US', { year: 'numeric', month: 'long' })}
-                            </td>
-                            <td className="font-semibold" style={{ color: '#be185d' }}>
-                              {formatCurrency(month.totalRevenue)}
-                            </td>
-                            <td>{formatNumber(month.totalTraffic)}</td>
-                            <td>{month.customerCount}</td>
-                            <td>{month.records}</td>
+                      : (reportData as any).monthlyMatrix?.customers.map((customerData: any, index: number) => (
+                          <tr key={customerData.customer.customerId} className="table-row">
+                            <td className="font-medium" style={{ color: '#831843' }}>{index + 1}</td>
+                            <td className="font-medium">{customerData.customer.customerName}</td>
+                            <td>{customerData.customer.serviceType}</td>
+                            <td>{customerData.customer.customerId}</td>
+                            {(reportData as any).monthlyMatrix?.months.map((month: string) => {
+                              const monthData = customerData.months.get(month);
+                              return (
+                                <React.Fragment key={`${customerData.customer.customerId}-${month}`}>
+                                  <td className="text-center">
+                                    {monthData ? formatNumber(monthData.traffic) : '-'}
+                                  </td>
+                                  <td className="text-center font-semibold" style={{ color: '#be185d' }}>
+                                    {monthData ? formatCurrency(monthData.revenue) : '-'}
+                                  </td>
+                                </React.Fragment>
+                              );
+                            })}
                           </tr>
                         ))
                     }
