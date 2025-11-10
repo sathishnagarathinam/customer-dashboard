@@ -194,17 +194,30 @@ const Reports: React.FC = () => {
       const consolidatedArray = Array.from(consolidatedData.values())
         .sort((a, b) => b.totalRevenue - a.totalRevenue);
 
-      // Extract unique customers
-      const uniqueCustomers = consolidatedArray.map(item => item.customer);
+      // Apply top customers limit to consolidated data
+      let limitedConsolidatedArray = consolidatedArray;
+      if (filters.topCustomersLimit && filters.topCustomersLimit !== 'All Customers') {
+        const limitNumber = parseInt(filters.topCustomersLimit.replace('Top ', ''));
+        limitedConsolidatedArray = consolidatedArray.slice(0, limitNumber);
+      }
 
-      // Calculate summary statistics
-      const totalRevenue = consolidatedArray.reduce((sum, item) => sum + item.totalRevenue, 0);
-      const totalTraffic = consolidatedArray.reduce((sum, item) => sum + item.totalTraffic, 0);
+      // Extract unique customers from limited data
+      const uniqueCustomers = limitedConsolidatedArray.map(item => item.customer);
+
+      // Calculate summary statistics from limited data
+      const totalRevenue = limitedConsolidatedArray.reduce((sum, item) => sum + item.totalRevenue, 0);
+      const totalTraffic = limitedConsolidatedArray.reduce((sum, item) => sum + item.totalTraffic, 0);
       const averageRevenuePerCustomer = uniqueCustomers.length > 0 ? totalRevenue / uniqueCustomers.length : 0;
 
+      // Filter traffic data to only include data from limited customers
+      const limitedCustomerIds = new Set(uniqueCustomers.map(customer => customer.customerId));
+      const limitedTrafficData = trafficWithCustomers.filter(item =>
+        limitedCustomerIds.has(item.customer.customerId)
+      );
+
       const report: ReportData = {
-        customers: uniqueCustomers,
-        trafficData: trafficWithCustomers, // Keep original data for export
+        customers: uniqueCustomers, // Now contains only limited customers
+        trafficData: limitedTrafficData, // Only traffic data for limited customers
         summary: {
           totalCustomers: uniqueCustomers.length,
           totalRevenue,
@@ -212,13 +225,6 @@ const Reports: React.FC = () => {
           averageRevenuePerCustomer
         }
       };
-
-      // Apply top customers limit to consolidated data
-      let limitedConsolidatedArray = consolidatedArray;
-      if (filters.topCustomersLimit && filters.topCustomersLimit !== 'All Customers') {
-        const limitNumber = parseInt(filters.topCustomersLimit.replace('Top ', ''));
-        limitedConsolidatedArray = consolidatedArray.slice(0, limitNumber);
-      }
 
       // Add consolidated breakdown to the report
       (report as any).consolidatedData = limitedConsolidatedArray;
