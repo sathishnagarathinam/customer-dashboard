@@ -213,8 +213,15 @@ const Reports: React.FC = () => {
         }
       };
 
+      // Apply top customers limit to consolidated data
+      let limitedConsolidatedArray = consolidatedArray;
+      if (filters.topCustomersLimit && filters.topCustomersLimit !== 'All Customers') {
+        const limitNumber = parseInt(filters.topCustomersLimit.replace('Top ', ''));
+        limitedConsolidatedArray = consolidatedArray.slice(0, limitNumber);
+      }
+
       // Add consolidated breakdown to the report
-      (report as any).consolidatedData = consolidatedArray.slice(0, parseInt(filters.topCustomersLimit || '10'));
+      (report as any).consolidatedData = limitedConsolidatedArray;
       (report as any).isConsolidated = true;
 
       setReportData(report);
@@ -263,58 +270,17 @@ const Reports: React.FC = () => {
           'Total Traffic': item.totalTraffic
         }));
 
-        // Then, create consolidated customer-wise records (grouped by contract_id with summed totals)
-        const contractMap = new Map();
-
-        // Group by contract_id and sum traffic/revenue - but only for limited customers
-        const limitedCustomerIds = new Set(limitedConsolidatedData.map(item => item.customer.customerId));
-
-        reportData.trafficData.forEach((item: any) => {
-          const customer = item.customer;
-          const contractId = item.contractId || customer?.contractId || 'Unknown';
-
-          // Only include data for customers within the limit
-          if (!limitedCustomerIds.has(customer?.customerId)) {
-            return;
-          }
-
-          if (!contractMap.has(contractId)) {
-            contractMap.set(contractId, {
-              customer: customer,
-              contractId: contractId,
-              totalTraffic: 0,
-              totalRevenue: 0,
-              recordCount: 0,
-              firstDate: item.date,
-              lastDate: item.date
-            });
-          }
-
-          const contractData = contractMap.get(contractId);
-          contractData.totalTraffic += item.trafficVolume;
-          contractData.totalRevenue += item.revenue;
-          contractData.recordCount += 1;
-
-          // Update date range
-          if (new Date(item.date) < new Date(contractData.firstDate)) {
-            contractData.firstDate = item.date;
-          }
-          if (new Date(item.date) > new Date(contractData.lastDate)) {
-            contractData.lastDate = item.date;
-          }
-        });
-
-        // Convert to array and create detailed records (one row per contract_id) - matching attachment format
-        const detailedRecords = Array.from(contractMap.values()).map((contractData: any, index: number) => {
+        // Then, create detailed customer records directly from the limited consolidated data
+        const detailedRecords = limitedConsolidatedData.map((item: any, index: number) => {
           return {
             'SL No': index + 1,
-            'Customer Name': contractData.customer?.customerName || 'Unknown',
-            'Service Type': contractData.customer?.serviceType || 'Unknown',
-            'Customer ID': contractData.customer?.customerId || 'Unknown',
-            'Office Name': contractData.customer?.officeName || 'Unknown',
-            'Contract ID': contractData.contractId,
-            'Total Revenue': contractData.totalRevenue,
-            'Total Traffic': contractData.totalTraffic
+            'Customer Name': item.customer.customerName,
+            'Service Type': item.customer.serviceType,
+            'Customer ID': item.customer.customerId,
+            'Office Name': item.customer.officeName,
+            'Contract ID': item.customer.contractId,
+            'Total Revenue': item.totalRevenue,
+            'Total Traffic': item.totalTraffic
           };
         });
 
