@@ -208,9 +208,12 @@ const Reports: React.FC = () => {
     if (!reportData) return;
 
     if (format === 'excel') {
+      // Determine report type
+      const isConsolidated = (reportData as any).isConsolidated;
+
       // Create comprehensive report with customer and traffic data joined
       const summaryData = [{
-        'Report Type': 'Summary',
+        'Report Type': isConsolidated ? 'Consolidated Summary' : 'Month-wise Summary',
         'Total Customers': reportData.summary.totalCustomers,
         'Total Revenue': reportData.summary.totalRevenue,
         'Total Traffic': reportData.summary.totalTraffic,
@@ -218,53 +221,77 @@ const Reports: React.FC = () => {
         'Report Generated': new Date().toLocaleDateString()
       }];
 
-      // Calculate customer total revenues for proper sorting
-      const customerTotalRevenues = new Map<string, number>();
-      reportData.trafficData.forEach(item => {
-        const customerId = item.customer.customerId; // Get customerId from joined customer data
-        const currentTotal = customerTotalRevenues.get(customerId) || 0;
-        customerTotalRevenues.set(customerId, currentTotal + item.revenue);
-      });
+      let comprehensiveData;
 
-      // Comprehensive traffic data with full customer information, sorted by customer total revenue (highest first)
-      const comprehensiveData = reportData.trafficData
-        .map(item => {
-          // For the new joined data structure, customer info is already available
-          const customer = (item as any).customer;
-          const customerId = customer?.customerId || 'Unknown';
-          return {
-            'Date': `${item.date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`, // Month and Year format
-            'Customer Name': customer?.customerName || 'Unknown',
-            'Customer ID': customerId,
-            'Office Name': customer?.officeName || 'Unknown',
-            'Contract ID': item.contractId || customer?.contractId || 'Unknown', // Use contractId from traffic data
-            'Service Type': item.serviceType,
-            'Payment Type': customer?.paymentType || 'Advance', // Added payment type to export
-            'Traffic Volume': item.trafficVolume,
-            'Revenue': item.revenue,
-            'Revenue per Traffic': item.trafficVolume > 0 ? (item.revenue / item.trafficVolume).toFixed(2) : '0',
-            // Add customer total revenue for sorting
-            _customerTotalRevenue: customerTotalRevenues.get(customerId) || 0,
-            _individualRevenue: item.revenue
-          };
-        })
-        .sort((a, b) => {
-          // Primary sort: by customer total revenue (descending)
-          if (a._customerTotalRevenue !== b._customerTotalRevenue) {
-            return b._customerTotalRevenue - a._customerTotalRevenue;
-          }
-          // Secondary sort: by individual record revenue (descending)
-          return b._individualRevenue - a._individualRevenue;
-        })
-        .map(item => {
-          // Remove the sorting fields from export
-          const { _customerTotalRevenue, _individualRevenue, ...exportItem } = item;
-          return exportItem;
+      if (isConsolidated) {
+        // For consolidated reports: Show one row per customer with total revenue
+        const consolidatedData = (reportData as any).consolidatedData || [];
+        comprehensiveData = consolidatedData.map((item: any, index: number) => ({
+          'Rank': index + 1,
+          'Customer Name': item.customer.customerName,
+          'Customer ID': item.customer.customerId,
+          'Office Name': item.customer.officeName,
+          'Contract ID': item.customer.contractId,
+          'Service Type': item.customer.serviceType,
+          'Payment Type': item.customer.paymentType || 'Advance',
+          'Total Revenue': item.totalRevenue,
+          'Total Traffic': item.totalTraffic,
+          'Total Records': item.recordCount,
+          'Period Start': new Date(item.firstDate).toLocaleDateString(),
+          'Period End': new Date(item.lastDate).toLocaleDateString(),
+          'Average Revenue per Record': item.recordCount > 0 ? (item.totalRevenue / item.recordCount).toFixed(2) : '0',
+          'Average Traffic per Record': item.recordCount > 0 ? (item.totalTraffic / item.recordCount).toFixed(2) : '0'
+        }));
+      } else {
+        // For month-wise reports: Show individual monthly records
+        // Calculate customer total revenues for proper sorting
+        const customerTotalRevenues = new Map<string, number>();
+        reportData.trafficData.forEach(item => {
+          const customerId = item.customer.customerId;
+          const currentTotal = customerTotalRevenues.get(customerId) || 0;
+          customerTotalRevenues.set(customerId, currentTotal + item.revenue);
         });
 
+        // Comprehensive traffic data with full customer information, sorted by customer total revenue (highest first)
+        comprehensiveData = reportData.trafficData
+          .map(item => {
+            const customer = (item as any).customer;
+            const customerId = customer?.customerId || 'Unknown';
+            return {
+              'Date': `${item.date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`,
+              'Customer Name': customer?.customerName || 'Unknown',
+              'Customer ID': customerId,
+              'Office Name': customer?.officeName || 'Unknown',
+              'Contract ID': item.contractId || customer?.contractId || 'Unknown',
+              'Service Type': item.serviceType,
+              'Payment Type': customer?.paymentType || 'Advance',
+              'Traffic Volume': item.trafficVolume,
+              'Revenue': item.revenue,
+              'Revenue per Traffic': item.trafficVolume > 0 ? (item.revenue / item.trafficVolume).toFixed(2) : '0',
+              // Add customer total revenue for sorting
+              _customerTotalRevenue: customerTotalRevenues.get(customerId) || 0,
+              _individualRevenue: item.revenue
+            };
+          })
+          .sort((a, b) => {
+            // Primary sort: by customer total revenue (descending)
+            if (a._customerTotalRevenue !== b._customerTotalRevenue) {
+              return b._customerTotalRevenue - a._customerTotalRevenue;
+            }
+            // Secondary sort: by individual record revenue (descending)
+            return b._individualRevenue - a._individualRevenue;
+          })
+          .map(item => {
+            // Remove the sorting fields from export
+            const { _customerTotalRevenue, _individualRevenue, ...exportItem } = item;
+            return exportItem;
+          });
+      }
+
       // Export comprehensive data including summary
+      const reportType = isConsolidated ? 'consolidated-report' : 'monthwise-report';
       const exportData = [...summaryData, ...comprehensiveData];
-      excelService.exportToExcel(exportData, 'comprehensive-report', 'Report');
+      excelService.exportToExcel(exportData, reportType, 'Report');
     }
   };
 
