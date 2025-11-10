@@ -245,9 +245,11 @@ const Reports: React.FC = () => {
       let comprehensiveData;
 
       if (isConsolidated) {
-        // For consolidated reports: Matrix-style layout with aggregated totals (matching month-wise structure)
+        // For consolidated reports: Include both consolidated summary AND detailed customer-wise records
         const consolidatedData = (reportData as any).consolidatedData || [];
-        comprehensiveData = consolidatedData.map((item: any, index: number) => ({
+
+        // First, create the consolidated summary (aggregated totals per customer)
+        const consolidatedSummary = consolidatedData.map((item: any, index: number) => ({
           'SL No': index + 1,
           'Customer Name': item.customer.customerName,
           'Service Type': item.customer.serviceType,
@@ -261,8 +263,31 @@ const Reports: React.FC = () => {
           'Period Start': new Date(item.firstDate).toLocaleDateString(),
           'Period End': new Date(item.lastDate).toLocaleDateString(),
           'Average Revenue per Record': item.recordCount > 0 ? (item.totalRevenue / item.recordCount).toFixed(2) : '0',
-          'Average Traffic per Record': item.recordCount > 0 ? (item.totalTraffic / item.recordCount).toFixed(2) : '0'
+          'Average Traffic per Record': item.recordCount > 0 ? (item.totalTraffic / item.recordCount).toFixed(2) : '0',
+          'Record Type': 'CONSOLIDATED SUMMARY'
         }));
+
+        // Then, create detailed customer-wise records (individual transactions)
+        const detailedRecords = reportData.trafficData.map((item: any, index: number) => {
+          const customer = item.customer;
+          return {
+            'SL No': index + 1,
+            'Customer Name': customer?.customerName || 'Unknown',
+            'Service Type': item.serviceType,
+            'Customer ID': customer?.customerId || 'Unknown',
+            'Office Name': customer?.officeName || 'Unknown',
+            'Contract ID': item.contractId || customer?.contractId || 'Unknown',
+            'Payment Type': customer?.paymentType || 'Advance',
+            'Date': item.date.toLocaleDateString(),
+            'Traffic Volume': item.trafficVolume,
+            'Revenue': item.revenue,
+            'Revenue per Traffic': item.trafficVolume > 0 ? (item.revenue / item.trafficVolume).toFixed(2) : '0',
+            'Record Type': 'DETAILED RECORD'
+          };
+        });
+
+        // Combine both: consolidated summary first, then detailed records
+        comprehensiveData = [...consolidatedSummary, ...detailedRecords];
       } else {
         // For month-wise reports: Show matrix format (customers as rows, months as columns)
         const monthlyMatrix = (reportData as any).monthlyMatrix;
