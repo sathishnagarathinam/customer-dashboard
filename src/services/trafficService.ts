@@ -404,6 +404,15 @@ export const trafficService = {
 
       if (trafficError) throw trafficError;
 
+      // Debug: Check what Supabase returned for our specific contract
+      const debugContractId = '40087891';
+      const debugRecordsFromDB = (trafficData || []).filter(t => t.contract_id === debugContractId);
+      console.log(`🔍 DEBUG: Records from Supabase for ${debugContractId}:`, debugRecordsFromDB);
+      console.log(`🔍 DEBUG: Count from Supabase: ${debugRecordsFromDB.length}`);
+      if (debugRecordsFromDB.length > 0) {
+        console.log(`🔍 DEBUG: Dates from Supabase:`, debugRecordsFromDB.map(r => r.date));
+      }
+
       // Then get all customers
       const { data: customersData, error: customersError } = await supabase
         .from('customers')
