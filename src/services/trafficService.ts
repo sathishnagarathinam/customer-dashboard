@@ -46,7 +46,7 @@ export const trafficService = {
         .from(TRAFFIC_TABLE)
         .select('*')
         .order('date', { ascending: false })
-        .limit(100000); // Increase limit to get all records
+        .range(0, 999999); // Fetch all records using range
 
       if (error) throw error;
 
@@ -75,7 +75,7 @@ export const trafficService = {
         .select('*')
         .eq('contract_id', contractId) // Changed from customer_id to contract_id
         .order('date', { ascending: false })
-        .limit(100000); // Increase limit to get all records
+        .range(0, 999999); // Fetch all records using range
 
       if (error) throw error;
 
@@ -137,7 +137,7 @@ export const trafficService = {
         .gte('date', startDate.toISOString().split('T')[0])
         .lte('date', endDate.toISOString().split('T')[0])
         .order('date', { ascending: false })
-        .limit(100000); // Increase limit to get all records
+        .range(0, 999999); // Fetch all records using range
 
       if (error) throw error;
 
@@ -400,12 +400,13 @@ export const trafficService = {
   }): Promise<ApiResponse<TrafficDataWithCustomer[]>> {
     try {
       // First get all traffic data
-      // Note: Supabase has a default limit of 1000 records. We need to fetch all records.
+      // Note: Supabase has a default limit of 1000 records. We need to fetch ALL records.
+      // Using range() to bypass the default limit
       const { data: trafficData, error: trafficError } = await supabase
         .from(TRAFFIC_TABLE)
-        .select('*')
+        .select('*', { count: 'exact' })
         .order('date', { ascending: false })
-        .limit(100000); // Set a high limit to get all records
+        .range(0, 999999); // Fetch all records using range
 
       if (trafficError) throw trafficError;
 
