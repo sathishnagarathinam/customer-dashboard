@@ -436,11 +436,22 @@ export const trafficService = {
         filteredTrafficData = filteredTrafficData.filter(item => item.contract_id === filters.contractId);
       }
 
+      // Track orphaned records (traffic without matching customers)
+      const orphanedRecords: { contractId: string; count: number; totalTraffic: number }[] = [];
+      const orphanedContractIds = new Map<string, { count: number; totalTraffic: number }>();
+
       // Join traffic data with customers and apply customer-based filters
       const trafficDataWithCustomers = filteredTrafficData
         .map(trafficRow => {
           const customer = customersByContractId.get(trafficRow.contract_id);
-          if (!customer) return null; // Skip if no matching customer found
+          if (!customer) {
+            // Track orphaned record
+            const existing = orphanedContractIds.get(trafficRow.contract_id) || { count: 0, totalTraffic: 0 };
+            existing.count += 1;
+            existing.totalTraffic += trafficRow.traffic_volume || 0;
+            orphanedContractIds.set(trafficRow.contract_id, existing);
+            return null; // Skip if no matching customer found
+          }
 
           return {
             id: trafficRow.id,
@@ -471,6 +482,23 @@ export const trafficService = {
           if (filters?.paymentType && item!.customer.paymentType !== filters.paymentType) return false;
           return true;
         }) as TrafficDataWithCustomer[];
+
+      // Log warning if orphaned records found
+      if (orphanedContractIds.size > 0) {
+        orphanedContractIds.forEach((stats, contractId) => {
+          orphanedRecords.push({ contractId, count: stats.count, totalTraffic: stats.totalTraffic });
+        });
+
+        const totalOrphaned = orphanedRecords.reduce((sum, r) => sum + r.count, 0);
+        const totalOrphanedTraffic = orphanedRecords.reduce((sum, r) => sum + r.totalTraffic, 0);
+
+        console.warn(
+          `⚠️ WARNING: ${totalOrphaned} traffic records excluded from report (no matching customer). ` +
+          `Total traffic volume excluded: ${totalOrphanedTraffic}. ` +
+          `Affected Contract IDs:`,
+          orphanedRecords
+        );
+      }
 
       return { success: true, data: trafficDataWithCustomers };
     } catch (error) {
