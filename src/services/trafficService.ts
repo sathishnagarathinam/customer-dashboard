@@ -440,6 +440,24 @@ export const trafficService = {
       const orphanedRecords: { contractId: string; count: number; totalTraffic: number }[] = [];
       const orphanedContractIds = new Map<string, { count: number; totalTraffic: number }>();
 
+      // Debug logging for specific contract
+      const debugContractId = '40087891';
+      const debugDate = '2025-04-30';
+      const debugRecord = filteredTrafficData.find(
+        t => t.contract_id === debugContractId && t.date === debugDate
+      );
+      if (debugRecord) {
+        console.log(`🔍 DEBUG: Found record for ${debugContractId} on ${debugDate}:`, debugRecord);
+        console.log(`🔍 DEBUG: Customer exists?`, customersByContractId.has(debugContractId));
+        if (customersByContractId.has(debugContractId)) {
+          console.log(`🔍 DEBUG: Customer data:`, customersByContractId.get(debugContractId));
+        }
+      } else {
+        console.log(`⚠️ DEBUG: Record for ${debugContractId} on ${debugDate} NOT in filteredTrafficData`);
+        const allRecordsForContract = (trafficData || []).filter(t => t.contract_id === debugContractId);
+        console.log(`🔍 DEBUG: All records for ${debugContractId}:`, allRecordsForContract);
+      }
+
       // Join traffic data with customers and apply customer-based filters
       const trafficDataWithCustomers = filteredTrafficData
         .map(trafficRow => {
@@ -453,7 +471,7 @@ export const trafficService = {
             return null; // Skip if no matching customer found
           }
 
-          return {
+          const result = {
             id: trafficRow.id,
             contractId: trafficRow.contract_id,
             date: new Date(trafficRow.date),
@@ -473,13 +491,33 @@ export const trafficService = {
               updatedAt: new Date(customer.updated_at)
             }
           };
+
+          // Debug log for specific record
+          if (trafficRow.contract_id === debugContractId && trafficRow.date === debugDate) {
+            console.log(`✅ DEBUG: Successfully mapped record for ${debugContractId} on ${debugDate}:`, result);
+          }
+
+          return result;
         })
         .filter(item => item !== null) // Remove items without matching customers
         .filter(item => {
           // Apply customer-based filters
-          if (filters?.customerId && item!.customer.customerId !== filters.customerId) return false;
-          if (filters?.officeName && item!.customer.officeName !== filters.officeName) return false;
-          if (filters?.paymentType && item!.customer.paymentType !== filters.paymentType) return false;
+          const passesCustomerId = !filters?.customerId || item!.customer.customerId === filters.customerId;
+          const passesOfficeName = !filters?.officeName || item!.customer.officeName === filters.officeName;
+          const passesPaymentType = !filters?.paymentType || item!.customer.paymentType === filters.paymentType;
+
+          // Debug log for specific record
+          if (item!.contractId === debugContractId && item!.date.toISOString().split('T')[0] === debugDate) {
+            console.log(`🔍 DEBUG: Filter check for ${debugContractId} on ${debugDate}:`);
+            console.log(`  - customerId filter: ${filters?.customerId || 'none'}, passes: ${passesCustomerId}`);
+            console.log(`  - officeName filter: ${filters?.officeName || 'none'}, passes: ${passesOfficeName}, actual: ${item!.customer.officeName}`);
+            console.log(`  - paymentType filter: ${filters?.paymentType || 'none'}, passes: ${passesPaymentType}, actual: ${item!.customer.paymentType}`);
+            console.log(`  - Overall passes: ${passesCustomerId && passesOfficeName && passesPaymentType}`);
+          }
+
+          if (!passesCustomerId) return false;
+          if (!passesOfficeName) return false;
+          if (!passesPaymentType) return false;
           return true;
         }) as TrafficDataWithCustomer[];
 
@@ -498,6 +536,17 @@ export const trafficService = {
           `Affected Contract IDs:`,
           orphanedRecords
         );
+      }
+
+      // Final debug check
+      const finalDebugRecord = trafficDataWithCustomers.find(
+        t => t.contractId === debugContractId && t.date.toISOString().split('T')[0] === debugDate
+      );
+      if (finalDebugRecord) {
+        console.log(`✅ DEBUG: Record for ${debugContractId} on ${debugDate} IS in final result:`, finalDebugRecord);
+      } else {
+        console.warn(`❌ DEBUG: Record for ${debugContractId} on ${debugDate} NOT in final result!`);
+        console.log(`📊 DEBUG: Total records returned: ${trafficDataWithCustomers.length}`);
       }
 
       return { success: true, data: trafficDataWithCustomers };
