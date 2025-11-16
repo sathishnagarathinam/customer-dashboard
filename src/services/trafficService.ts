@@ -428,6 +428,17 @@ export const trafficService = {
       console.log(`🔍 DEBUG: April record exists in Supabase data?`, !!aprilRecord, aprilRecord);
       console.log(`🔍 DEBUG: May record exists in Supabase data?`, !!mayRecord, mayRecord);
 
+      // Check if ANY records exist for this contract with April in the date
+      const anyAprilRecords = (trafficData || []).filter(t =>
+        t.contract_id === debugContractId && (t.date?.includes('04') || t.date?.includes('Apr'))
+      );
+      console.log(`🔍 DEBUG: Any April-related records for ${debugContractId}:`, anyAprilRecords);
+
+      // Show ALL contract IDs in the first 100 records to verify data is loading
+      const first100ContractIds = (trafficData || []).slice(0, 100).map(t => t.contract_id);
+      console.log(`🔍 DEBUG: First 100 contract IDs:`, first100ContractIds);
+      console.log(`🔍 DEBUG: Does ${debugContractId} appear in first 100?`, first100ContractIds.includes(debugContractId));
+
       // Then get all customers
       const { data: customersData, error: customersError } = await supabase
         .from('customers')
