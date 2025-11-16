@@ -24,10 +24,14 @@ const Upload: React.FC = () => {
 
   const loadLastUploadInfo = async () => {
     try {
+      console.log('Loading last upload info...');
       const response = await trafficService.getLastUploadBatch();
+      console.log('Last upload batch response:', response);
       if (response.success && response.data) {
+        console.log('Setting last upload info:', response.data);
         setLastUploadInfo(response.data);
       } else {
+        console.log('No last upload found or error:', response.error);
         setLastUploadInfo(null);
       }
     } catch (error) {
@@ -314,6 +318,12 @@ const Upload: React.FC = () => {
               <X className="h-4 w-4" />
               {reverting ? 'Reverting...' : `Revert Last Upload (${lastUploadInfo.count} records)`}
             </button>
+          )}
+          {/* Debug info - remove after testing */}
+          {uploadType === 'traffic' && !lastUploadInfo && (
+            <div className="text-sm text-gray-500 italic">
+              No recent upload found. Upload traffic data to enable revert.
+            </div>
           )}
         </div>
       </div>
