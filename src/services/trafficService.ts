@@ -420,34 +420,76 @@ export const trafficService = {
       // Filter traffic data and join with customers
       let filteredTrafficData = trafficData || [];
 
+      // Debug: Check specific record before filtering
+      const debugContractId = '40087891';
+      const debugDate = '2025-04-30';
+      const debugRecordBeforeFilter = filteredTrafficData.find(
+        t => t.contract_id === debugContractId && t.date === debugDate
+      );
+      console.log(`🔍 DEBUG: Record BEFORE filters:`, debugRecordBeforeFilter);
+      console.log(`🔍 DEBUG: Applied filters:`, {
+        startDate: filters?.startDate?.toISOString().split('T')[0],
+        endDate: filters?.endDate?.toISOString().split('T')[0],
+        serviceType: filters?.serviceType,
+        contractId: filters?.contractId
+      });
+
       // Apply traffic data filters
       if (filters?.startDate) {
         const startDateStr = filters.startDate.toISOString().split('T')[0];
+        const beforeCount = filteredTrafficData.length;
         filteredTrafficData = filteredTrafficData.filter(item => item.date >= startDateStr);
+        const afterCount = filteredTrafficData.length;
+        console.log(`🔍 DEBUG: startDate filter (${startDateStr}): ${beforeCount} -> ${afterCount} records`);
+
+        // Check if our debug record was filtered out
+        const debugStillExists = filteredTrafficData.find(t => t.contract_id === debugContractId && t.date === debugDate);
+        if (debugRecordBeforeFilter && !debugStillExists) {
+          console.warn(`❌ DEBUG: Record filtered out by startDate! Record date: ${debugRecordBeforeFilter.date}, Filter: ${startDateStr}`);
+        }
       }
       if (filters?.endDate) {
         const endDateStr = filters.endDate.toISOString().split('T')[0];
+        const beforeCount = filteredTrafficData.length;
         filteredTrafficData = filteredTrafficData.filter(item => item.date <= endDateStr);
+        const afterCount = filteredTrafficData.length;
+        console.log(`🔍 DEBUG: endDate filter (${endDateStr}): ${beforeCount} -> ${afterCount} records`);
+
+        // Check if our debug record was filtered out
+        const debugStillExists = filteredTrafficData.find(t => t.contract_id === debugContractId && t.date === debugDate);
+        if (debugRecordBeforeFilter && !debugStillExists) {
+          console.warn(`❌ DEBUG: Record filtered out by endDate! Record date: ${debugRecordBeforeFilter.date}, Filter: ${endDateStr}`);
+        }
       }
       if (filters?.serviceType) {
+        const beforeCount = filteredTrafficData.length;
         filteredTrafficData = filteredTrafficData.filter(item => item.service_type === filters.serviceType);
+        const afterCount = filteredTrafficData.length;
+        console.log(`🔍 DEBUG: serviceType filter (${filters.serviceType}): ${beforeCount} -> ${afterCount} records`);
+
+        // Check if our debug record was filtered out
+        const debugStillExists = filteredTrafficData.find(t => t.contract_id === debugContractId && t.date === debugDate);
+        if (debugRecordBeforeFilter && !debugStillExists) {
+          console.warn(`❌ DEBUG: Record filtered out by serviceType! Record type: ${debugRecordBeforeFilter.service_type}, Filter: ${filters.serviceType}`);
+        }
       }
       if (filters?.contractId) {
+        const beforeCount = filteredTrafficData.length;
         filteredTrafficData = filteredTrafficData.filter(item => item.contract_id === filters.contractId);
+        const afterCount = filteredTrafficData.length;
+        console.log(`🔍 DEBUG: contractId filter (${filters.contractId}): ${beforeCount} -> ${afterCount} records`);
       }
 
       // Track orphaned records (traffic without matching customers)
       const orphanedRecords: { contractId: string; count: number; totalTraffic: number }[] = [];
       const orphanedContractIds = new Map<string, { count: number; totalTraffic: number }>();
 
-      // Debug logging for specific contract
-      const debugContractId = '40087891';
-      const debugDate = '2025-04-30';
+      // Debug logging for specific contract (after filters)
       const debugRecord = filteredTrafficData.find(
         t => t.contract_id === debugContractId && t.date === debugDate
       );
       if (debugRecord) {
-        console.log(`🔍 DEBUG: Found record for ${debugContractId} on ${debugDate}:`, debugRecord);
+        console.log(`🔍 DEBUG: Found record for ${debugContractId} on ${debugDate} AFTER filters:`, debugRecord);
         console.log(`🔍 DEBUG: Customer exists?`, customersByContractId.has(debugContractId));
         if (customersByContractId.has(debugContractId)) {
           console.log(`🔍 DEBUG: Customer data:`, customersByContractId.get(debugContractId));
