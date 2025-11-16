@@ -400,15 +400,38 @@ export const trafficService = {
   }): Promise<ApiResponse<TrafficDataWithCustomer[]>> {
     try {
       // First get all traffic data
-      // Note: Supabase has a default limit of 1000 records. We need to fetch ALL records.
-      // Using range() to bypass the default limit
-      const { data: trafficData, error: trafficError } = await supabase
-        .from(TRAFFIC_TABLE)
-        .select('*', { count: 'exact' })
-        .order('date', { ascending: false })
-        .range(0, 999999); // Fetch all records using range
+      // Note: Supabase has a hard limit. We need to fetch ALL records using pagination.
+      let trafficData: any[] = [];
+      let from = 0;
+      const pageSize = 1000;
+      let hasMore = true;
 
-      if (trafficError) throw trafficError;
+      console.log('🔄 Fetching all traffic data in batches...');
+
+      while (hasMore) {
+        const { data: batch, error: batchError } = await supabase
+          .from(TRAFFIC_TABLE)
+          .select('*')
+          .order('date', { ascending: false })
+          .range(from, from + pageSize - 1);
+
+        if (batchError) throw batchError;
+
+        if (batch && batch.length > 0) {
+          trafficData = trafficData.concat(batch);
+          console.log(`📦 Fetched batch: ${from} to ${from + batch.length - 1}, Total so far: ${trafficData.length}`);
+
+          if (batch.length < pageSize) {
+            hasMore = false; // Last batch
+          } else {
+            from += pageSize;
+          }
+        } else {
+          hasMore = false;
+        }
+      }
+
+      console.log(`✅ Finished fetching all traffic data: ${trafficData.length} total records`);
 
       // Debug: Check what Supabase returned for our specific contract
       const debugContractId = '40087891';
