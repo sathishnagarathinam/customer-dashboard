@@ -12,6 +12,73 @@ const Upload: React.FC = () => {
   const [uploadResult, setUploadResult] = useState<ExcelUploadResult | null>(null);
   const [previewData, setPreviewData] = useState<any[]>([]);
   const [showPreview, setShowPreview] = useState(false);
+  const [lastUploadInfo, setLastUploadInfo] = useState<{ batchId: string; count: number; uploadedAt: Date } | null>(null);
+  const [reverting, setReverting] = useState(false);
+
+  // Load last upload info when component mounts or upload type changes
+  React.useEffect(() => {
+    if (uploadType === 'traffic') {
+      loadLastUploadInfo();
+    }
+  }, [uploadType]);
+
+  const loadLastUploadInfo = async () => {
+    try {
+      const response = await trafficService.getLastUploadBatch();
+      if (response.success && response.data) {
+        setLastUploadInfo(response.data);
+      } else {
+        setLastUploadInfo(null);
+      }
+    } catch (error) {
+      console.error('Error loading last upload info:', error);
+      setLastUploadInfo(null);
+    }
+  };
+
+  const handleRevertLastUpload = async () => {
+    if (!lastUploadInfo) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to revert the last upload?\n\n` +
+      `This will delete ${lastUploadInfo.count} traffic records uploaded on ${new Date(lastUploadInfo.uploadedAt).toLocaleString()}.\n\n` +
+      `This action cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    setReverting(true);
+
+    try {
+      const response = await trafficService.revertLastUpload();
+
+      if (response.success) {
+        setUploadResult({
+          success: true,
+          message: response.message || `Successfully reverted ${response.data?.deleted} records`,
+          data: []
+        });
+        setLastUploadInfo(null);
+        // Reload to check if there's another batch
+        await loadLastUploadInfo();
+      } else {
+        setUploadResult({
+          success: false,
+          message: response.error || 'Failed to revert upload',
+          errors: [response.error || 'Unknown error']
+        });
+      }
+    } catch (error) {
+      console.error('Error reverting upload:', error);
+      setUploadResult({
+        success: false,
+        message: 'Error reverting upload: ' + (error as Error).message,
+        errors: ['Failed to revert upload']
+      });
+    } finally {
+      setReverting(false);
+    }
+  };
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -140,6 +207,8 @@ const Upload: React.FC = () => {
             message: response.message || `Successfully imported ${response.data.inserted} traffic records`,
             data: uploadResult.data
           });
+          // Reload last upload info after successful traffic upload
+          await loadLastUploadInfo();
         } else {
           // Handle validation errors with detailed feedback
           const errorMessages = [response.error || 'Failed to import traffic data'];
@@ -210,27 +279,42 @@ const Upload: React.FC = () => {
 
       {/* Upload Type Selection */}
       <div className="mb-6">
-        <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4">
-          <button
-            onClick={() => setUploadType('customers')}
-            className={`px-4 py-3 sm:py-2 rounded-lg font-medium text-sm lg:text-base transition-colors ${
-              uploadType === 'customers'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
-          >
-            Customer Data
-          </button>
-          <button
-            onClick={() => setUploadType('traffic')}
-            className={`px-4 py-3 sm:py-2 rounded-lg font-medium text-sm lg:text-base transition-colors ${
-              uploadType === 'traffic'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
-          >
-            Traffic & Revenue Data
-          </button>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4">
+            <button
+              onClick={() => setUploadType('customers')}
+              className={`px-4 py-3 sm:py-2 rounded-lg font-medium text-sm lg:text-base transition-colors ${
+                uploadType === 'customers'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+            >
+              Customer Data
+            </button>
+            <button
+              onClick={() => setUploadType('traffic')}
+              className={`px-4 py-3 sm:py-2 rounded-lg font-medium text-sm lg:text-base transition-colors ${
+                uploadType === 'traffic'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+            >
+              Traffic & Revenue Data
+            </button>
+          </div>
+
+          {/* Revert Last Upload Button - Only show for traffic uploads */}
+          {uploadType === 'traffic' && lastUploadInfo && (
+            <button
+              onClick={handleRevertLastUpload}
+              disabled={reverting}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg font-medium text-sm hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+              title={`Revert upload from ${new Date(lastUploadInfo.uploadedAt).toLocaleString()}`}
+            >
+              <X className="h-4 w-4" />
+              {reverting ? 'Reverting...' : `Revert Last Upload (${lastUploadInfo.count} records)`}
+            </button>
+          )}
         </div>
       </div>
 

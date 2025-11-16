@@ -548,7 +548,27 @@ const Reports: React.FC = () => {
               type="date"
               className="form-input"
               value={filters.startDate?.toISOString().split('T')[0] || ''}
-              onChange={(e) => setFilters({ ...filters, startDate: new Date(e.target.value) })}
+              onChange={(e) => {
+                e.preventDefault();
+                const dateValue = e.target.value;
+                if (dateValue && dateValue.length === 10) {
+                  // Only update when we have a complete date (YYYY-MM-DD format)
+                  const newDate = new Date(dateValue);
+                  if (!isNaN(newDate.getTime())) {
+                    setFilters({ ...filters, startDate: newDate });
+                  }
+                }
+              }}
+              onBlur={(e) => {
+                // Update on blur as well to catch any manual edits
+                const dateValue = e.target.value;
+                if (dateValue && dateValue.length === 10) {
+                  const newDate = new Date(dateValue);
+                  if (!isNaN(newDate.getTime())) {
+                    setFilters({ ...filters, startDate: newDate });
+                  }
+                }
+              }}
             />
           </div>
 
@@ -558,7 +578,27 @@ const Reports: React.FC = () => {
               type="date"
               className="form-input"
               value={filters.endDate?.toISOString().split('T')[0] || ''}
-              onChange={(e) => setFilters({ ...filters, endDate: new Date(e.target.value) })}
+              onChange={(e) => {
+                e.preventDefault();
+                const dateValue = e.target.value;
+                if (dateValue && dateValue.length === 10) {
+                  // Only update when we have a complete date (YYYY-MM-DD format)
+                  const newDate = new Date(dateValue);
+                  if (!isNaN(newDate.getTime())) {
+                    setFilters({ ...filters, endDate: newDate });
+                  }
+                }
+              }}
+              onBlur={(e) => {
+                // Update on blur as well to catch any manual edits
+                const dateValue = e.target.value;
+                if (dateValue && dateValue.length === 10) {
+                  const newDate = new Date(dateValue);
+                  if (!isNaN(newDate.getTime())) {
+                    setFilters({ ...filters, endDate: newDate });
+                  }
+                }
+              }}
             />
           </div>
 

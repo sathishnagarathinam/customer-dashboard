@@ -197,8 +197,89 @@ export const trafficService = {
     }
   },
 
+  // Get the last upload batch information
+  async getLastUploadBatch(): Promise<ApiResponse<{ batchId: string; count: number; uploadedAt: Date } | null>> {
+    try {
+      // Get the most recent batch_id and its upload time
+      const { data, error } = await supabase
+        .from(TRAFFIC_TABLE)
+        .select('batch_id, created_at')
+        .not('batch_id', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (error) throw error;
+
+      if (!data || data.length === 0) {
+        return { success: true, data: null };
+      }
+
+      const batchId = data[0].batch_id;
+      const uploadedAt = new Date(data[0].created_at);
+
+      // Count records in this batch
+      const { count, error: countError } = await supabase
+        .from(TRAFFIC_TABLE)
+        .select('*', { count: 'exact', head: true })
+        .eq('batch_id', batchId);
+
+      if (countError) throw countError;
+
+      return {
+        success: true,
+        data: {
+          batchId,
+          count: count || 0,
+          uploadedAt
+        }
+      };
+    } catch (error) {
+      console.error('Error getting last upload batch:', error);
+      return { success: false, error: 'Failed to get last upload batch information' };
+    }
+  },
+
+  // Revert the last upload batch
+  async revertLastUpload(): Promise<ApiResponse<{ deleted: number; batchId: string }>> {
+    try {
+      // Get the last batch info first
+      const lastBatchResponse = await this.getLastUploadBatch();
+
+      if (!lastBatchResponse.success || !lastBatchResponse.data) {
+        return {
+          success: false,
+          error: 'No recent upload found to revert',
+          message: 'No recent upload found to revert'
+        };
+      }
+
+      const { batchId, count } = lastBatchResponse.data;
+
+      // Delete all records with this batch_id
+      const { error } = await supabase
+        .from(TRAFFIC_TABLE)
+        .delete()
+        .eq('batch_id', batchId);
+
+      if (error) throw error;
+
+      return {
+        success: true,
+        data: { deleted: count, batchId },
+        message: `Successfully reverted upload: deleted ${count} traffic records`
+      };
+    } catch (error) {
+      console.error('Error reverting last upload:', error);
+      return {
+        success: false,
+        error: `Failed to revert last upload: ${(error as Error).message}`,
+        message: `Failed to revert last upload: ${(error as Error).message}`
+      };
+    }
+  },
+
   // Bulk create traffic data (for Excel imports) - with enhanced validation for duplicates and Customer IDs
-  async bulkCreateTrafficData(trafficDataArray: Omit<TrafficData, 'id' | 'createdAt'>[]): Promise<ApiResponse<{ inserted: number; failed: number; total: number; validationErrors?: string[] }>> {
+  async bulkCreateTrafficData(trafficDataArray: Omit<TrafficData, 'id' | 'createdAt'>[]): Promise<ApiResponse<{ inserted: number; failed: number; total: number; validationErrors?: string[]; batchId?: string }>> {
     try {
       console.log('Bulk creating traffic data:', trafficDataArray.length, 'records');
       console.log('Sample data:', trafficDataArray[0]);
@@ -236,6 +317,10 @@ export const trafficService = {
       // No validation errors found, proceed with insertion
       console.log('No validation errors found, proceeding with insertion of', trafficDataArray.length, 'traffic records');
 
+      // Generate a unique batch ID for this upload
+      const batchId = `batch_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+      console.log('Generated batch ID:', batchId);
+
       // Process all traffic data (validation already passed)
       const insertData = trafficDataArray.map((data, index) => {
         try {
@@ -258,6 +343,7 @@ export const trafficService = {
             traffic_volume: Number(data.trafficVolume) || 0,
             revenue: Number(data.revenue) || 0,
             service_type: data.serviceType,
+            batch_id: batchId, // Add batch_id to track this upload
             created_at: new Date().toISOString()
           };
 
@@ -268,7 +354,7 @@ export const trafficService = {
         }
       });
 
-      console.log('Inserting traffic data to Supabase:', insertData.length, 'records');
+      console.log('Inserting traffic data to Supabase:', insertData.length, 'records with batch_id:', batchId);
 
       const { data, error } = await supabase
         .from(TRAFFIC_TABLE)
@@ -285,7 +371,7 @@ export const trafficService = {
 
       return {
         success: true,
-        data: { inserted: insertedCount, failed: 0, total: trafficDataArray.length },
+        data: { inserted: insertedCount, failed: 0, total: trafficDataArray.length, batchId },
         message: `Successfully imported all ${insertedCount} traffic records. No duplicates or invalid Customer IDs found.`
       };
     } catch (error) {
