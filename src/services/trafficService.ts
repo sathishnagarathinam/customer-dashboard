@@ -430,7 +430,6 @@ export const trafficService = {
       let filteredTrafficData = trafficData || [];
 
       // Debug: Check specific record before filtering
-      const debugContractId = '40087891';
       const debugDate = '2025-04-30';
 
       // Check all records for this contract to see date format
