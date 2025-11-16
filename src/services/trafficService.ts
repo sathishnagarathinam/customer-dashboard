@@ -423,10 +423,20 @@ export const trafficService = {
       // Debug: Check specific record before filtering
       const debugContractId = '40087891';
       const debugDate = '2025-04-30';
+
+      // Check all records for this contract to see date format
+      const allDebugRecords = filteredTrafficData.filter(t => t.contract_id === debugContractId);
+      console.log(`🔍 DEBUG: All records for ${debugContractId} BEFORE filters:`, allDebugRecords);
+      if (allDebugRecords.length > 0) {
+        console.log(`🔍 DEBUG: Sample date value:`, allDebugRecords[0].date);
+        console.log(`🔍 DEBUG: Sample date type:`, typeof allDebugRecords[0].date);
+        console.log(`🔍 DEBUG: Sample date as string:`, String(allDebugRecords[0].date));
+      }
+
       const debugRecordBeforeFilter = filteredTrafficData.find(
         t => t.contract_id === debugContractId && t.date === debugDate
       );
-      console.log(`🔍 DEBUG: Record BEFORE filters:`, debugRecordBeforeFilter);
+      console.log(`🔍 DEBUG: Record BEFORE filters (exact match):`, debugRecordBeforeFilter);
       console.log(`🔍 DEBUG: Applied filters:`, {
         startDate: filters?.startDate?.toISOString().split('T')[0],
         endDate: filters?.endDate?.toISOString().split('T')[0],
