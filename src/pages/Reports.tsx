@@ -97,8 +97,8 @@ const Reports: React.FC = () => {
         }
 
         const monthData = customerData.months.get(monthKey);
-        monthData.traffic += item.trafficVolume;
-        monthData.revenue += item.revenue;
+        monthData.traffic += item.trafficVolume || 0; // Handle null/undefined
+        monthData.revenue += item.revenue || 0; // Handle null/undefined
         monthData.records += 1;
       });
 
@@ -115,8 +115,8 @@ const Reports: React.FC = () => {
       const uniqueCustomers = Array.from(customerMap.values());
 
       // Calculate summary statistics
-      const totalRevenue = trafficWithCustomers.reduce((sum, item) => sum + item.revenue, 0);
-      const totalTraffic = trafficWithCustomers.reduce((sum, item) => sum + item.trafficVolume, 0);
+      const totalRevenue = trafficWithCustomers.reduce((sum, item) => sum + (item.revenue || 0), 0);
+      const totalTraffic = trafficWithCustomers.reduce((sum, item) => sum + (item.trafficVolume || 0), 0);
       const averageRevenuePerCustomer = uniqueCustomers.length > 0 ? totalRevenue / uniqueCustomers.length : 0;
 
       const report: ReportData = {
@@ -182,8 +182,8 @@ const Reports: React.FC = () => {
           });
         }
         const existing = consolidatedData.get(contractId);
-        existing.totalRevenue += item.revenue;
-        existing.totalTraffic += item.trafficVolume;
+        existing.totalRevenue += item.revenue || 0; // Handle null/undefined
+        existing.totalTraffic += item.trafficVolume || 0; // Handle null/undefined
         existing.recordCount += 1;
         if (new Date(item.date) < new Date(existing.firstDate)) {
           existing.firstDate = item.date;
@@ -452,8 +452,8 @@ const Reports: React.FC = () => {
     );
 
     // Recalculate summary statistics for the top contracts
-    const totalRevenue = filteredTrafficData.reduce((sum, item) => sum + item.revenue, 0);
-    const totalTraffic = filteredTrafficData.reduce((sum, item) => sum + item.trafficVolume, 0);
+    const totalRevenue = filteredTrafficData.reduce((sum, item) => sum + (item.revenue || 0), 0);
+    const totalTraffic = filteredTrafficData.reduce((sum, item) => sum + (item.trafficVolume || 0), 0);
     const averageRevenuePerCustomer = filteredCustomers.length > 0 ? totalRevenue / filteredCustomers.length : 0;
 
     return {
@@ -512,7 +512,10 @@ const Reports: React.FC = () => {
     }).format(amount);
   };
 
-  const formatNumber = (num: number) => {
+  const formatNumber = (num: number | null | undefined) => {
+    if (num === null || num === undefined || isNaN(num)) {
+      return '-';
+    }
     return new Intl.NumberFormat('en-US').format(num);
   };
 
