@@ -20,6 +20,7 @@ const Reports: React.FC = () => {
     serviceType: '',
     paymentType: '', // Added payment type filter
     customerId: '',
+    contractId: '', // Added contract ID filter
     topCustomersLimit: 'All Customers'
   });
 
@@ -60,7 +61,8 @@ const Reports: React.FC = () => {
         serviceType: filters.serviceType,
         officeName: filters.officeName,
         paymentType: filters.paymentType,
-        customerId: filters.customerId
+        customerId: filters.customerId,
+        contractId: filters.contractId
       });
 
       if (!trafficWithCustomersResponse.success || !trafficWithCustomersResponse.data) {
@@ -69,23 +71,23 @@ const Reports: React.FC = () => {
 
       const trafficWithCustomers = trafficWithCustomersResponse.data;
 
-      // Group data by customer and month for month-wise reporting (customers as rows, months as columns)
+      // Group data by contract ID and month for month-wise reporting (contracts as rows, months as columns)
       const customerMonthlyData = new Map();
       const allMonths = new Set();
 
       trafficWithCustomers.forEach(item => {
-        const customerId = item.customer.customerId;
+        const contractId = item.customer.contractId;
         const monthKey = new Date(item.date).toISOString().slice(0, 7); // YYYY-MM format
         allMonths.add(monthKey);
 
-        if (!customerMonthlyData.has(customerId)) {
-          customerMonthlyData.set(customerId, {
+        if (!customerMonthlyData.has(contractId)) {
+          customerMonthlyData.set(contractId, {
             customer: item.customer,
             months: new Map()
           });
         }
 
-        const customerData = customerMonthlyData.get(customerId);
+        const customerData = customerMonthlyData.get(contractId);
         if (!customerData.months.has(monthKey)) {
           customerData.months.set(monthKey, {
             traffic: 0,
@@ -103,11 +105,11 @@ const Reports: React.FC = () => {
       // Sort months chronologically
       const sortedMonths = Array.from(allMonths).sort();
 
-      // Extract unique customers from the traffic data
+      // Extract unique contracts from the traffic data
       const customerMap = new Map();
       trafficWithCustomers.forEach(item => {
-        if (!customerMap.has(item.customer.customerId)) {
-          customerMap.set(item.customer.customerId, item.customer);
+        if (!customerMap.has(item.customer.contractId)) {
+          customerMap.set(item.customer.contractId, item.customer);
         }
       });
       const uniqueCustomers = Array.from(customerMap.values());
@@ -155,7 +157,8 @@ const Reports: React.FC = () => {
         serviceType: filters.serviceType,
         officeName: filters.officeName,
         paymentType: filters.paymentType,
-        customerId: filters.customerId
+        customerId: filters.customerId,
+        contractId: filters.contractId
       });
 
       if (!trafficWithCustomersResponse.success || !trafficWithCustomersResponse.data) {
@@ -164,12 +167,12 @@ const Reports: React.FC = () => {
 
       const trafficWithCustomers = trafficWithCustomersResponse.data;
 
-      // Consolidate data by customer (sum all their records across the period)
+      // Consolidate data by contract ID (sum all their records across the period)
       const consolidatedData = new Map();
       trafficWithCustomers.forEach(item => {
-        const customerId = item.customer.customerId;
-        if (!consolidatedData.has(customerId)) {
-          consolidatedData.set(customerId, {
+        const contractId = item.customer.contractId;
+        if (!consolidatedData.has(contractId)) {
+          consolidatedData.set(contractId, {
             customer: item.customer,
             totalRevenue: 0,
             totalTraffic: 0,
@@ -178,7 +181,7 @@ const Reports: React.FC = () => {
             lastDate: item.date
           });
         }
-        const existing = consolidatedData.get(customerId);
+        const existing = consolidatedData.get(contractId);
         existing.totalRevenue += item.revenue;
         existing.totalTraffic += item.trafficVolume;
         existing.recordCount += 1;
@@ -209,10 +212,10 @@ const Reports: React.FC = () => {
       const totalTraffic = limitedConsolidatedArray.reduce((sum, item) => sum + item.totalTraffic, 0);
       const averageRevenuePerCustomer = uniqueCustomers.length > 0 ? totalRevenue / uniqueCustomers.length : 0;
 
-      // Filter traffic data to only include data from limited customers
-      const limitedCustomerIds = new Set(uniqueCustomers.map(customer => customer.customerId));
+      // Filter traffic data to only include data from limited contracts
+      const limitedContractIds = new Set(uniqueCustomers.map(customer => customer.contractId));
       const limitedTrafficData = trafficWithCustomers.filter(item =>
-        limitedCustomerIds.has(item.customer.customerId)
+        limitedContractIds.has(item.customer.contractId)
       );
 
       const report: ReportData = {
@@ -267,11 +270,11 @@ const Reports: React.FC = () => {
         // First, create the consolidated summary (aggregated totals per customer) - matching attachment format
         const consolidatedSummary = limitedConsolidatedData.map((item: any, index: number) => ({
           'SL No': index + 1,
+          'Contract ID': item.customer.contractId,
           'Customer Name': item.customer.customerName,
           'Service Type': item.customer.serviceType,
           'Customer ID': item.customer.customerId,
           'Office Name': item.customer.officeName,
-          'Contract ID': item.customer.contractId,
           'Total Revenue': item.totalRevenue,
           'Total Traffic': item.totalTraffic
         }));
@@ -280,11 +283,11 @@ const Reports: React.FC = () => {
         const detailedRecords = limitedConsolidatedData.map((item: any, index: number) => {
           return {
             'SL No': index + 1,
+            'Contract ID': item.customer.contractId,
             'Customer Name': item.customer.customerName,
             'Service Type': item.customer.serviceType,
             'Customer ID': item.customer.customerId,
             'Office Name': item.customer.officeName,
-            'Contract ID': item.customer.contractId,
             'Total Revenue': item.totalRevenue,
             'Total Traffic': item.totalTraffic
           };
@@ -302,11 +305,11 @@ const Reports: React.FC = () => {
           comprehensiveData = limitedCustomers.map((customerData: any, index: number) => {
             const exportRow: any = {
               'SL No': index + 1,
+              'Contract ID': customerData.customer.contractId,
               'Customer Name': customerData.customer.customerName,
               'Service Type': customerData.customer.serviceType,
               'Customer ID': customerData.customer.customerId,
               'Office Name': customerData.customer.officeName,
-              'Contract ID': customerData.customer.contractId,
               'Payment Type': customerData.customer.paymentType || 'Advance'
             };
 
@@ -346,23 +349,6 @@ const Reports: React.FC = () => {
 
   const getUniqueValues = (array: any[], key: string) => {
     return [...new Set(array.map(item => item[key]))].filter(Boolean);
-  };
-
-  // Get filtered customers based on selected office and payment type
-  const getFilteredCustomers = () => {
-    let filteredCustomers = customers;
-
-    // Filter by office name if selected
-    if (filters.officeName) {
-      filteredCustomers = filteredCustomers.filter(customer => customer.officeName === filters.officeName);
-    }
-
-    // Filter by payment type if selected
-    if (filters.paymentType) {
-      filteredCustomers = filteredCustomers.filter(customer => customer.paymentType === filters.paymentType);
-    }
-
-    return filteredCustomers;
   };
 
   // Get unique office names
@@ -426,47 +412,46 @@ const Reports: React.FC = () => {
 
     const limitNumber = parseInt(filters.topCustomersLimit.replace('Top ', ''));
 
-    // Calculate total revenue per customer by summing all their revenue values
-    // Note: Traffic data now uses contractId, but we group by customer.customerId for customer-level reporting
-    const customerRevenues = new Map<string, number>();
+    // Calculate total revenue per contract by summing all their revenue values
+    const contractRevenues = new Map<string, number>();
     data.trafficData.forEach(item => {
-      const customerId = item.customer.customerId; // Get customerId from the joined customer data
-      const currentTotal = customerRevenues.get(customerId) || 0;
-      // Sum up all revenue amounts for each customer (pure total revenue, no derived metrics)
-      customerRevenues.set(customerId, currentTotal + item.revenue);
+      const contractId = item.customer.contractId; // Get contractId from the joined customer data
+      const currentTotal = contractRevenues.get(contractId) || 0;
+      // Sum up all revenue amounts for each contract (pure total revenue, no derived metrics)
+      contractRevenues.set(contractId, currentTotal + item.revenue);
     });
 
-    // Sort customers by total revenue in descending order (highest revenue first)
-    // This ensures top customers are ranked purely by their absolute revenue contribution
-    const sortedCustomersByRevenue = Array.from(customerRevenues.entries())
+    // Sort contracts by total revenue in descending order (highest revenue first)
+    // This ensures top contracts are ranked purely by their absolute revenue contribution
+    const sortedContractsByRevenue = Array.from(contractRevenues.entries())
       .sort((a, b) => b[1] - a[1]) // b[1] - a[1] = descending by revenue amount
-      .slice(0, limitNumber); // Take only the top N customers
+      .slice(0, limitNumber); // Take only the top N contracts
 
-    // Extract customer IDs in revenue-ranked order
-    const topCustomerIds = sortedCustomersByRevenue.map(([customerId]) => customerId);
+    // Extract contract IDs in revenue-ranked order
+    const topContractIds = sortedContractsByRevenue.map(([contractId]) => contractId);
 
     // Create a map for maintaining revenue-based ordering
-    const customerOrderMap = new Map<string, number>();
-    topCustomerIds.forEach((customerId, index) => {
-      customerOrderMap.set(customerId, index);
+    const contractOrderMap = new Map<string, number>();
+    topContractIds.forEach((contractId, index) => {
+      contractOrderMap.set(contractId, index);
     });
 
-    // Filter customers and maintain revenue-based ordering
+    // Filter contracts and maintain revenue-based ordering
     const filteredCustomers = data.customers
-      .filter(customer => topCustomerIds.includes(customer.customerId))
+      .filter(customer => topContractIds.includes(customer.contractId))
       .sort((a, b) => {
-        // Sort customers by their revenue ranking (highest revenue first)
-        const orderA = customerOrderMap.get(a.customerId) || 0;
-        const orderB = customerOrderMap.get(b.customerId) || 0;
+        // Sort contracts by their revenue ranking (highest revenue first)
+        const orderA = contractOrderMap.get(a.contractId) || 0;
+        const orderB = contractOrderMap.get(b.contractId) || 0;
         return orderA - orderB;
       });
 
-    // Filter traffic data for top customers only
+    // Filter traffic data for top contracts only
     const filteredTrafficData = data.trafficData.filter(item =>
-      topCustomerIds.includes(item.customer.customerId) // Use customer.customerId from joined data
+      topContractIds.includes(item.customer.contractId) // Use customer.contractId from joined data
     );
 
-    // Recalculate summary statistics for the top customers
+    // Recalculate summary statistics for the top contracts
     const totalRevenue = filteredTrafficData.reduce((sum, item) => sum + item.revenue, 0);
     const totalTraffic = filteredTrafficData.reduce((sum, item) => sum + item.trafficVolume, 0);
     const averageRevenuePerCustomer = filteredCustomers.length > 0 ? totalRevenue / filteredCustomers.length : 0;
@@ -634,31 +619,6 @@ const Reports: React.FC = () => {
             )}
           </div>
 
-          {/* Customer Name Dropdown Filter (Cascading) */}
-          <div>
-            <label className="form-label">Customer Name</label>
-            <select
-              className="form-input"
-              value={filters.customerId || ''}
-              onChange={(e) => setFilters({ ...filters, customerId: e.target.value })}
-            >
-              <option value="">All Customers</option>
-              {getFilteredCustomers().map((customer) => (
-                <option key={customer.id} value={customer.customerId}>
-                  {customer.customerName} ({customer.customerId})
-                </option>
-              ))}
-            </select>
-            {(filters.officeName || filters.paymentType) && (
-              <p className="text-xs text-gray-500 mt-1">
-                Showing customers filtered by {[
-                  filters.officeName && `office: ${filters.officeName}`,
-                  filters.paymentType && `payment type: ${filters.paymentType}`
-                ].filter(Boolean).join(', ')}
-              </p>
-            )}
-          </div>
-
           {/* Top Customers Limit Dropdown */}
           <div>
             <label className="form-label">Top Customers Limit</label>
@@ -769,6 +729,7 @@ const Reports: React.FC = () => {
                       {(reportData as any).isConsolidated ? (
                         <>
                           <th>Rank</th>
+                          <th>Contract ID</th>
                           <th>Customer</th>
                           <th>Office</th>
                           <th>Payment Type</th>
@@ -780,6 +741,7 @@ const Reports: React.FC = () => {
                       ) : (
                         <>
                           <th>SL No</th>
+                          <th>Contract ID</th>
                           <th>Customer Name</th>
                           <th>Service Type</th>
                           <th>Customer ID</th>
@@ -800,8 +762,9 @@ const Reports: React.FC = () => {
                   <tbody>
                     {(reportData as any).isConsolidated
                       ? (reportData as any).consolidatedData?.map((item: any, index: number) => (
-                          <tr key={item.customer.customerId} className="table-row">
+                          <tr key={item.customer.contractId} className="table-row">
                             <td className="font-medium" style={{ color: '#831843' }}>#{index + 1}</td>
+                            <td className="font-medium">{item.customer.contractId}</td>
                             <td className="font-medium">{item.customer.customerName}</td>
                             <td>{item.customer.officeName}</td>
                             <td>
@@ -822,15 +785,16 @@ const Reports: React.FC = () => {
                           </tr>
                         ))
                       : (reportData as any).monthlyMatrix?.customers.map((customerData: any, index: number) => (
-                          <tr key={customerData.customer.customerId} className="table-row">
+                          <tr key={customerData.customer.contractId} className="table-row">
                             <td className="font-medium" style={{ color: '#831843' }}>{index + 1}</td>
+                            <td className="font-medium">{customerData.customer.contractId}</td>
                             <td className="font-medium">{customerData.customer.customerName}</td>
                             <td>{customerData.customer.serviceType}</td>
                             <td>{customerData.customer.customerId}</td>
                             {(reportData as any).monthlyMatrix?.months.map((month: string) => {
                               const monthData = customerData.months.get(month);
                               return (
-                                <React.Fragment key={`${customerData.customer.customerId}-${month}`}>
+                                <React.Fragment key={`${customerData.customer.contractId}-${month}`}>
                                   <td className="text-center">
                                     {monthData ? formatNumber(monthData.traffic) : '-'}
                                   </td>
@@ -892,6 +856,7 @@ const Reports: React.FC = () => {
                   <thead className="table-header">
                     <tr>
                       <th>Rank</th>
+                      <th>Contract ID</th>
                       <th>Customer</th>
                       <th>Office</th>
                       <th>Total Revenue ↓</th>
@@ -918,6 +883,7 @@ const Reports: React.FC = () => {
                         .map((customer, index) => (
                           <tr key={customer.id}>
                             <td className="font-bold text-blue-600">#{index + 1}</td>
+                            <td className="font-medium">{customer.contractId}</td>
                             <td className="font-medium">{customer.customerName}</td>
                             <td>{customer.officeName}</td>
                             <td className="font-bold text-green-600">{formatCurrency(customer.totalRevenue)}</td>
@@ -946,6 +912,7 @@ const Reports: React.FC = () => {
                   <thead className="table-header">
                     <tr>
                       <th>Date</th>
+                      <th>Contract ID</th>
                       <th>Customer</th>
                       <th>Office</th>
                       <th>Service</th>
@@ -984,6 +951,7 @@ const Reports: React.FC = () => {
                           return (
                             <tr key={item.id}>
                               <td>{item.date.toLocaleDateString()}</td>
+                              <td className="font-medium">{customer?.contractId || 'Unknown'}</td>
                               <td className="font-medium">{customer?.customerName || customer?.customerId || 'Unknown'}</td>
                               <td>{customer?.officeName || 'Unknown'}</td>
                               <td>
